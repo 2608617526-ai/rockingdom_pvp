@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+package-lock.json
+.pnpm-store/
+
+# Build output
+client/dist/
+server/dist/
+shared/dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Misc
+*.tsbuildinfo

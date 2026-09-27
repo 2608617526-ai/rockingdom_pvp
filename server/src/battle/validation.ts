@@ -1,6 +1,6 @@
 import {
   SKILL_DEFINITIONS,
-  effectiveSkillCost,
+  getActualSkillCost,
   type BattleAction,
 } from '@rockingdom/shared';
 import type { PlayerState } from '../types';
@@ -44,7 +44,7 @@ function validateSkillAction(
   }
   const skill = SKILL_DEFINITIONS[skillId];
   if (!skill) return { ok: false, reason: '未知技能' };
-  const cost = effectiveSkillCost(pet.def.id, skill, pet.passive);
+  const cost = getActualSkillCost(pet.def.id, skill, pet.passive);
   if (pet.energy < cost) return { ok: false, reason: '能量不足' };
   return { ok: true };
 }

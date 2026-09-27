@@ -21,7 +21,7 @@ export default function ParticleBackground() {
     if (!ctx) return;
 
     let raf = 0;
-    const colors = ['#ff6d00', '#00e5ff', '#76ff03', '#ffffff', '#ffd54f', '#b388ff'];
+    const colors = ['#ff5a3c', '#ff9d2e', '#ffd54f', '#ff8a65', '#ffe0b2', '#ffffff'];
     const particles: Particle[] = [];
 
     const resize = () => {

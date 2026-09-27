@@ -1,5 +1,4 @@
 import type { PassiveState, PetId, SkillDefinition } from './types';
-import { DELUGE_REDUCED_COST } from './constants';
 
 /**
  * 与战斗相关的纯函数（服务端校验与客户端 UI 计算共用同一份逻辑，
@@ -13,34 +12,34 @@ export function createInitialPassiveState(): PassiveState {
     fireBlowPowerBonus: 0,
     mountainFireMultiplier: 1,
     nextAttackBonusStacks: 0,
-    skillCostReduction: 0,
+    nextSkillCostReduction: 0,
+    heavenlyFloodCostReduction: 0,
     moistureApplied: false,
-    tianhongCostReduced: false,
   };
 }
 
-/** 某技能在“不考虑被动减耗”情况下的基础能耗（天洪被永久降耗后为 1） */
-export function effectiveBaseSkillCost(
-  skill: SkillDefinition,
-  passive: PassiveState,
-): number {
-  if (skill.id === 'deluge' && passive.tianhongCostReduced) {
-    return DELUGE_REDUCED_COST;
-  }
-  return skill.cost;
-}
-
-/** 某技能当前实际需要消耗的能量（已计入圣水守护的被动减耗） */
-export function effectiveSkillCost(
+/**
+ * 获取技能当前实际能耗（纯函数：只计算，绝不修改任何状态）。
+ *
+ * 实际能耗 = max(0, 基础能耗 - 天洪永久减耗(仅天洪) - 圣水守护下一技能减耗(仅圣水守护))
+ *
+ * 两个减耗机制完全独立，互不污染：
+ *  - heavenlyFloodCostReduction：天洪每成功应对一次状态技能 +6，只影响天洪，永不消耗。
+ *  - nextSkillCostReduction：圣水守护每使用一次技能 +2，下次技能结算时消耗并清零。
+ *
+ * 技能基础能耗（skill.cost）永远是静态配置，绝不被写回修改。
+ */
+export function getActualSkillCost(
   petId: PetId,
   skill: SkillDefinition,
   passive: PassiveState,
 ): number {
-  let base = effectiveBaseSkillCost(skill, passive);
-  if (petId === 'water') {
-    // 天洪永久降耗后最低为 1，圣水守护的被动减耗不得再把它扣到 0
-    const floor = skill.id === 'deluge' ? 1 : 0;
-    base = Math.max(floor, base - passive.skillCostReduction);
+  let cost = skill.cost;
+  if (skill.id === 'deluge') {
+    cost -= passive.heavenlyFloodCostReduction;
   }
-  return base;
+  if (petId === 'water') {
+    cost -= passive.nextSkillCostReduction;
+  }
+  return Math.max(0, cost);
 }

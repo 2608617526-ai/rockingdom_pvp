@@ -46,9 +46,13 @@ export const WATER_COST_REDUCTION_PER_SKILL = 2;
 export const MOISTURE_MAGIC_MULTIPLIER = 2.7;
 /** 水泡盾：应对攻击时魔法攻击 ×1.7 */
 export const BUBBLE_SHIELD_MAGIC_MULTIPLIER = 1.7;
-/** 天洪：应对状态技能后能耗永久降为 1 */
-export const DELUGE_REDUCED_COST = 1;
+/** 天洪：每成功应对一次状态技能，能耗永久减少 6（可叠加） */
+export const DELUGE_COST_REDUCTION_PER_COUNTER = 6;
 
 // ---- 断线 ----
 /** 战斗中断线宽限时间（毫秒），超时判定失败 */
 export const DISCONNECT_GRACE_MS = 10000;
+
+// ---- 账号 ----
+/** 默认头像（项目自带资源，由前端 public 目录提供） */
+export const DEFAULT_AVATAR = '/assets/avatar/default-pig.svg';

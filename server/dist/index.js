@@ -1,14 +1,22 @@
 // src/index.ts
+import { mkdirSync as mkdirSync3 } from "fs";
+import { resolve as resolve3 } from "path";
 import { createServer } from "http";
 import express from "express";
 import { Server } from "socket.io";
 
 // src/config.ts
 import "dotenv/config";
+import { dirname, resolve } from "path";
+import { fileURLToPath } from "url";
+var here = dirname(fileURLToPath(import.meta.url));
 var config = {
   port: Number(process.env.PORT ?? 3e3),
   clientOrigin: process.env.CLIENT_ORIGIN ?? "http://localhost:5173",
-  nodeEnv: process.env.NODE_ENV ?? "development"
+  nodeEnv: process.env.NODE_ENV ?? "development",
+  dataDir: process.env.DATA_DIR ?? resolve(here, "..", "data"),
+  uploadsDir: process.env.UPLOADS_DIR ?? resolve(here, "..", "uploads"),
+  dbPath: process.env.DB_PATH ?? resolve(here, "..", "data", "game.db")
 };
 
 // ../shared/src/constants.ts
@@ -29,8 +37,8 @@ var SIEVE_FLOW_BONUS_POWER = 60;
 var WATER_COST_REDUCTION_PER_SKILL = 2;
 var MOISTURE_MAGIC_MULTIPLIER = 2.7;
 var BUBBLE_SHIELD_MAGIC_MULTIPLIER = 1.7;
-var DELUGE_REDUCED_COST = 1;
-var DISCONNECT_GRACE_MS = 1e4;
+var DELUGE_COST_REDUCTION_PER_COUNTER = 6;
+var DEFAULT_AVATAR = "/assets/avatar/default-pig.svg";
 
 // ../shared/src/logic.ts
 function createInitialPassiveState() {
@@ -40,24 +48,40 @@ function createInitialPassiveState() {
     fireBlowPowerBonus: 0,
     mountainFireMultiplier: 1,
     nextAttackBonusStacks: 0,
-    skillCostReduction: 0,
-    moistureApplied: false,
-    tianhongCostReduced: false
+    nextSkillCostReduction: 0,
+    heavenlyFloodCostReduction: 0,
+    moistureApplied: false
   };
 }
-function effectiveBaseSkillCost(skill, passive) {
-  if (skill.id === "deluge" && passive.tianhongCostReduced) {
-    return DELUGE_REDUCED_COST;
+function getActualSkillCost(petId, skill, passive) {
+  let cost = skill.cost;
+  if (skill.id === "deluge") {
+    cost -= passive.heavenlyFloodCostReduction;
   }
-  return skill.cost;
-}
-function effectiveSkillCost(petId, skill, passive) {
-  let base = effectiveBaseSkillCost(skill, passive);
   if (petId === "water") {
-    const floor = skill.id === "deluge" ? 1 : 0;
-    base = Math.max(floor, base - passive.skillCostReduction);
+    cost -= passive.nextSkillCostReduction;
   }
-  return base;
+  return Math.max(0, cost);
+}
+
+// ../shared/src/validation.ts
+function isSixDigitAccount(value) {
+  return /^\d{6}$/.test(value);
+}
+function validatePassword(password) {
+  const missing = [];
+  if (!/[A-Z]/.test(password)) missing.push("\u5927\u5199\u5B57\u6BCD");
+  if (!/[a-z]/.test(password)) missing.push("\u5C0F\u5199\u5B57\u6BCD");
+  if (!/\d/.test(password)) missing.push("\u6570\u5B57");
+  if (!/[^A-Za-z0-9]/.test(password)) missing.push("\u7279\u6B8A\u5B57\u7B26");
+  if (missing.length === 0) return { ok: true, message: "" };
+  return { ok: false, message: `\u5BC6\u7801\u8FD8\u9700\u5305\u542B\uFF1A${missing.join("\u3001")}` };
+}
+function validateNickname(nickname) {
+  const len = Array.from(nickname.trim()).length;
+  if (len < 2) return { ok: false, message: "\u6635\u79F0\u81F3\u5C11 2 \u4E2A\u5B57\u7B26" };
+  if (len > 12) return { ok: false, message: "\u6635\u79F0\u6700\u591A 12 \u4E2A\u5B57\u7B26" };
+  return { ok: true, message: "" };
 }
 
 // ../shared/src/data/elements.ts
@@ -87,8 +111,8 @@ var PET_DEFINITIONS = {
     },
     initialEnergy: 10,
     maxEnergy: 10,
-    passiveName: "\u70C8\u706B\u4E4B\u6012",
-    passiveDescription: "\u6BCF\u6210\u529F\u4F7F\u7528\u4E00\u6B21\u6280\u80FD\uFF0C\u7269\u7406\u653B\u51FB\u63D0\u5347 30%\uFF08\u57FA\u4E8E\u57FA\u7840\u503C\uFF0C\u6301\u7EED\u6574\u573A\u6218\u6597\uFF09\u3002",
+    passiveName: "\u70BD\u70ED\u6218\u610F",
+    passiveDescription: "\u6BCF\u6B21\u4F7F\u7528\u6280\u80FD\u540E\uFF0C\u7269\u7406\u653B\u51FB\u529B\u63D0\u9AD8 30%\u3002",
     skillIds: ["fire_blow", "fire_cart", "fire_shield", "mountain_fire", "charge"]
   },
   water: {
@@ -105,8 +129,8 @@ var PET_DEFINITIONS = {
     },
     initialEnergy: 10,
     maxEnergy: 10,
-    passiveName: "\u5723\u6C34\u6D41\u8F6C",
-    passiveDescription: "\u6BCF\u6210\u529F\u4F7F\u7528\u4E00\u6B21\u6280\u80FD\uFF0C\u4E0B\u4E00\u6B21\u4F7F\u7528\u6280\u80FD\u7684\u80FD\u91CF\u6D88\u8017\u964D\u4F4E 2\u3002",
+    passiveName: "\u8282\u80FD\u65BD\u6CD5",
+    passiveDescription: "\u6BCF\u6B21\u4F7F\u7528\u6280\u80FD\u540E\uFF0C\u4E0B\u4E00\u6B21\u6280\u80FD\u7684\u80FD\u91CF\u6D88\u8017\u964D\u4F4E 2 \u70B9\uFF0C\u6700\u4F4E\u4E0D\u4F1A\u4F4E\u4E8E 0\u3002",
     skillIds: ["moisture", "bubble_shield", "deluge", "bubble", "charge"]
   },
   grass: {
@@ -123,8 +147,8 @@ var PET_DEFINITIONS = {
     },
     initialEnergy: 10,
     maxEnergy: 10,
-    passiveName: "\u5149\u5408\u84C4\u529B",
-    passiveDescription: "\u6BCF\u56DE\u590D\u4E00\u6B21\u80FD\u91CF\uFF0C\u4E0B\u4E00\u6B21\u653B\u51FB\u6280\u80FD\u4F24\u5BB3\u63D0\u5347 20%\uFF08\u53EF\u53E0\u52A0\uFF09\u3002",
+    passiveName: "\u81EA\u7136\u4E4B\u529B",
+    passiveDescription: "\u6BCF\u6B21\u6062\u590D 1 \u70B9\u80FD\u91CF\u540E\uFF0C\u4E0B\u4E00\u6B21\u653B\u51FB\u6280\u80FD\u4F24\u5BB3\u63D0\u9AD8 20%\u3002\u5982\u679C\u4E0B\u4E00\u56DE\u5408\u6CA1\u6709\u4F7F\u7528\u653B\u51FB\u6280\u80FD\uFF0C\u6548\u679C\u4E0D\u4F1A\u6D88\u5931\u3002",
     skillIds: ["sieve_flow", "enzyme", "cactus", "photosynthesis", "charge"]
   }
 };
@@ -190,6 +214,7 @@ var SKILL_DEFINITIONS = {
     id: "enzyme",
     name: "\u9176\u6D53\u5EA6\u8C03\u6574",
     type: "DEFENSE",
+    element: "GRASS",
     cost: 2,
     description: "\u672C\u56DE\u5408\u51CF\u4F24 70%\u3002\u82E5\u5BF9\u65B9\u672C\u56DE\u5408\u4F7F\u7528\u653B\u51FB\u6280\u80FD\uFF0C\u81EA\u8EAB\u56DE\u590D\u6700\u5927\u751F\u547D\u503C 20%\u3002"
   },
@@ -207,6 +232,7 @@ var SKILL_DEFINITIONS = {
     id: "photosynthesis",
     name: "\u5149\u5408\u4F5C\u7528",
     type: "STATUS",
+    element: "GRASS",
     cost: 0,
     description: "\u56DE\u590D\u6700\u5927\u751F\u547D\u503C 20%\uFF0C\u5E76\u56DE\u590D 3 \u70B9\u80FD\u91CF\u3002"
   },
@@ -215,6 +241,7 @@ var SKILL_DEFINITIONS = {
     id: "moisture",
     name: "\u6DA6\u6CFD",
     type: "STATUS",
+    element: "WATER",
     cost: 0,
     description: "\u9B54\u6CD5\u653B\u51FB\u63D0\u5347\u81F3\u57FA\u7840\u503C\u7684 270%\uFF08\u6BCF\u573A\u6218\u6597\u4EC5\u53EF\u751F\u6548\u4E00\u6B21\uFF09\u3002"
   },
@@ -222,6 +249,7 @@ var SKILL_DEFINITIONS = {
     id: "bubble_shield",
     name: "\u6C34\u6CE1\u76FE",
     type: "DEFENSE",
+    element: "WATER",
     cost: 2,
     description: "\u672C\u56DE\u5408\u51CF\u4F24 70%\u3002\u82E5\u6210\u529F\u5E94\u5BF9\u5BF9\u65B9\u653B\u51FB\uFF0C\u81EA\u8EAB\u9B54\u6CD5\u653B\u51FB\u63D0\u5347 70%\u3002"
   },
@@ -233,7 +261,7 @@ var SKILL_DEFINITIONS = {
     element: "WATER",
     power: 140,
     cost: 7,
-    description: "\u82E5\u5BF9\u65B9\u672C\u56DE\u5408\u4F7F\u7528\u72B6\u6001\u7C7B\u6280\u80FD\uFF0C\u5219\u5148\u624B\u653B\u51FB\uFF0C\u4E14\u80FD\u8017\u6C38\u4E45\u964D\u4E3A 1\u3002"
+    description: "\u82E5\u5BF9\u65B9\u672C\u56DE\u5408\u4F7F\u7528\u72B6\u6001\u7C7B\u6280\u80FD\uFF0C\u5219\u5148\u624B\u653B\u51FB\uFF0C\u4E14\u5929\u6D2A\u81EA\u8EAB\u80FD\u8017\u6C38\u4E45\u51CF\u5C11 6\uFF08\u53EF\u53E0\u52A0\uFF0C\u6700\u4F4E\u4E3A 0\uFF09\u3002"
   },
   bubble: {
     id: "bubble",
@@ -269,11 +297,15 @@ function createPetInstances(defs, ownerId) {
     passive: createInitialPassiveState()
   }));
 }
-function createPlayerState(id, socketId, name) {
+function createPlayerState(id, socketId, name, user = null) {
   return {
     id,
     socketId,
     name,
+    userId: user?.userId ?? null,
+    account: user?.account ?? "",
+    avatar: user?.avatar ?? DEFAULT_AVATAR,
+    isGuest: !user,
     pets: createPetInstances(PET_LIST, id),
     activePetId: null,
     selectedStarter: null,
@@ -393,7 +425,7 @@ function applyAfterSkillPassives(pet, actor, skill, ctx) {
     });
   }
   if (pet.def.id === "water") {
-    pet.passive.skillCostReduction += WATER_COST_REDUCTION_PER_SKILL;
+    pet.passive.nextSkillCostReduction += WATER_COST_REDUCTION_PER_SKILL;
   }
 }
 function onEnergyRestore(pet, actor, ctx) {
@@ -410,9 +442,9 @@ function onEnergyRestore(pet, actor, ctx) {
 
 // src/battle/effects.ts
 function paySkillCost(pet, skill) {
-  const cost = effectiveSkillCost(pet.def.id, skill, pet.passive);
+  const cost = getActualSkillCost(pet.def.id, skill, pet.passive);
   if (pet.def.id === "water") {
-    pet.passive.skillCostReduction = 0;
+    pet.passive.nextSkillCostReduction = 0;
   }
   pet.energy = Math.max(0, pet.energy - cost);
   return cost;
@@ -449,13 +481,13 @@ function resolveSkill(actor, opponent, skillId, ctx) {
   if (!skill) return;
   if (skill.id === "deluge" && opponent.currentAction?.type === "SKILL") {
     const oppSkill = SKILL_DEFINITIONS[opponent.currentAction.skillId ?? ""];
-    if (oppSkill?.type === "STATUS" && !pet.passive.tianhongCostReduced) {
-      pet.passive.tianhongCostReduced = true;
+    if (oppSkill?.type === "STATUS") {
+      pet.passive.heavenlyFloodCostReduction += DELUGE_COST_REDUCTION_PER_COUNTER;
       ctx.events.push({
         type: "BUFF",
         actorId: actor.id,
         petName: pet.def.name,
-        description: "\u5929\u6D2A\u7684\u7279\u6B8A\u5E94\u5BF9\u89E6\u53D1\uFF0C\u80FD\u8017\u6C38\u4E45\u964D\u4E3A 1\uFF01"
+        description: "\u5929\u6D2A\u6210\u529F\u5E94\u5BF9\u72B6\u6001\u6280\u80FD\uFF0C\u81EA\u8EAB\u80FD\u8017\u6C38\u4E45\u51CF\u5C11 6\uFF01"
       });
     }
   }
@@ -708,7 +740,7 @@ function validateSkillAction(player, skillId) {
   }
   const skill = SKILL_DEFINITIONS[skillId];
   if (!skill) return { ok: false, reason: "\u672A\u77E5\u6280\u80FD" };
-  const cost = effectiveSkillCost(pet.def.id, skill, pet.passive);
+  const cost = getActualSkillCost(pet.def.id, skill, pet.passive);
   if (pet.energy < cost) return { ok: false, reason: "\u80FD\u91CF\u4E0D\u8DB3" };
   return { ok: true };
 }
@@ -736,7 +768,8 @@ var BattleEngine = class {
       winnerId: null,
       isDraw: false,
       forcedSwitchPlayerIds: [],
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      log: []
     };
   }
   /** 双方都选完首发后，将首发宠物设为出战，进入第 1 回合 */
@@ -811,6 +844,7 @@ var BattleEngine = class {
     room.phase = "GAME_OVER";
     room.winnerId = winner?.id ?? null;
     room.isDraw = false;
+    room.endReason = "SURRENDER";
     return { winnerId: winner?.id ?? null };
   }
   /** 断线判负 */
@@ -819,6 +853,7 @@ var BattleEngine = class {
     room.phase = "GAME_OVER";
     room.winnerId = winner?.id ?? null;
     room.isDraw = false;
+    room.endReason = "DISCONNECT";
     return { winnerId: winner?.id ?? null };
   }
   static resolveTurn(room) {
@@ -845,6 +880,7 @@ var BattleEngine = class {
           description: `${loser.name} \u9003\u8DD1\u4E86\uFF01${winner.name} \u83B7\u80DC\uFF01`
         });
       }
+      room.endReason = fleeA && fleeB ? "DRAW" : "FLEE";
       room.phase = "GAME_OVER";
       return { events, gameOver: true };
     }
@@ -924,6 +960,7 @@ var BattleEngine = class {
       room.phase = "GAME_OVER";
       room.winnerId = victory.winnerId;
       room.isDraw = victory.isDraw;
+      room.endReason = victory.isDraw ? "DRAW" : "DEFEAT";
       if (victory.isDraw) {
         events.push({ type: "VICTORY", description: "\u53CC\u65B9\u5168\u90E8\u5BA0\u7269\u9635\u4EA1\uFF0C\u5E73\u5C40\uFF01" });
       } else {
@@ -1043,13 +1080,167 @@ var MatchmakingQueue = class {
   }
 };
 
+// src/db/index.ts
+import { mkdirSync } from "fs";
+import { dirname as dirname2 } from "path";
+var { DatabaseSync: DatabaseSyncCtor } = process.getBuiltinModule(
+  "node:sqlite"
+);
+var db = null;
+function initDatabase() {
+  if (db) return db;
+  mkdirSync(dirname2(config.dbPath), { recursive: true });
+  const database = new DatabaseSyncCtor(config.dbPath);
+  database.exec(`
+    PRAGMA journal_mode = WAL;
+
+    CREATE TABLE IF NOT EXISTS users (
+      id            TEXT PRIMARY KEY,
+      account       TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      nickname      TEXT NOT NULL,
+      avatar        TEXT NOT NULL,
+      created_at    TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      token      TEXT PRIMARY KEY,
+      user_id    TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS battles (
+      id          TEXT PRIMARY KEY,
+      p1_user_id  TEXT,
+      p1_account  TEXT NOT NULL,
+      p1_nickname TEXT NOT NULL,
+      p1_avatar   TEXT NOT NULL,
+      p2_user_id  TEXT,
+      p2_account  TEXT NOT NULL,
+      p2_nickname TEXT NOT NULL,
+      p2_avatar   TEXT NOT NULL,
+      winner_id   TEXT,
+      is_draw     INTEGER NOT NULL,
+      created_at  TEXT NOT NULL,
+      battle_log  TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_battles_p1 ON battles(p1_user_id);
+    CREATE INDEX IF NOT EXISTS idx_battles_p2 ON battles(p2_user_id);
+  `);
+  db = database;
+  return db;
+}
+function getDb() {
+  if (!db) return initDatabase();
+  return db;
+}
+
+// src/db/sessions.ts
+function createSession(token, userId) {
+  getDb().prepare("INSERT INTO sessions (token, user_id, created_at) VALUES (?, ?, ?)").run(token, userId, (/* @__PURE__ */ new Date()).toISOString());
+}
+function findUserIdByToken(token) {
+  const row = getDb().prepare("SELECT user_id FROM sessions WHERE token = ?").get(token);
+  return row?.user_id ?? null;
+}
+function deleteSessionsForUser(userId) {
+  getDb().prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
+}
+
+// src/db/users.ts
+import { randomUUID as randomUUID2 } from "crypto";
+function createUser(input) {
+  const db2 = getDb();
+  const id = randomUUID2();
+  const createdAt = (/* @__PURE__ */ new Date()).toISOString();
+  db2.prepare(
+    `INSERT INTO users (id, account, password_hash, nickname, avatar, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(id, input.account, input.passwordHash, input.nickname, input.avatar, createdAt);
+  return {
+    id,
+    account: input.account,
+    password_hash: input.passwordHash,
+    nickname: input.nickname,
+    avatar: input.avatar,
+    created_at: createdAt
+  };
+}
+function findUserByAccount(account) {
+  return getDb().prepare("SELECT * FROM users WHERE account = ?").get(account);
+}
+function findUserById(id) {
+  return getDb().prepare("SELECT * FROM users WHERE id = ?").get(id);
+}
+
+// src/db/battles.ts
+function insertBattle(b) {
+  getDb().prepare(
+    `INSERT INTO battles (
+         id, p1_user_id, p1_account, p1_nickname, p1_avatar,
+         p2_user_id, p2_account, p2_nickname, p2_avatar,
+         winner_id, is_draw, created_at, battle_log
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    b.id,
+    b.player1.userId,
+    b.player1.account,
+    b.player1.nickname,
+    b.player1.avatar,
+    b.player2.userId,
+    b.player2.account,
+    b.player2.nickname,
+    b.player2.avatar,
+    b.winnerId,
+    b.isDraw ? 1 : 0,
+    b.createdAt,
+    JSON.stringify(b.battleLog)
+  );
+}
+function listBattlesForUser(userId) {
+  return getDb().prepare(
+    "SELECT * FROM battles WHERE p1_user_id = ? OR p2_user_id = ? ORDER BY created_at DESC"
+  ).all(userId, userId);
+}
+function getBattleById(id) {
+  return getDb().prepare("SELECT * FROM battles WHERE id = ?").get(id);
+}
+
+// src/history/index.ts
+function recordBattle(room) {
+  const hasRegistered = room.players.some((p) => p.userId);
+  if (!hasRegistered) return;
+  const [a, b] = room.players;
+  const winner = room.players.find((p) => p.id === room.winnerId);
+  const winnerId = winner ? winner.userId ?? winner.id : null;
+  insertBattle({
+    id: room.id,
+    player1: toHistoryPlayer(a),
+    player2: toHistoryPlayer(b),
+    winnerId,
+    isDraw: room.isDraw,
+    createdAt: new Date(room.createdAt).toISOString(),
+    battleLog: room.log
+  });
+}
+function toHistoryPlayer(p) {
+  return {
+    userId: p.userId,
+    account: p.account,
+    nickname: p.name,
+    avatar: p.avatar
+  };
+}
+
 // src/socket/index.ts
 var VALID_PLAYER_ID = /^[a-zA-Z0-9_-]{6,64}$/;
 function setupSocket(io2) {
   const queue = new MatchmakingQueue();
   const rooms = /* @__PURE__ */ new Map();
   const playerToRoom = /* @__PURE__ */ new Map();
-  const disconnectTimers = /* @__PURE__ */ new Map();
+  const userIdToSocket = /* @__PURE__ */ new Map();
+  const userIdToRoom = /* @__PURE__ */ new Map();
   function roomOf(playerId) {
     const roomId = playerToRoom.get(playerId);
     return roomId ? rooms.get(roomId) : void 0;
@@ -1066,15 +1257,17 @@ function setupSocket(io2) {
     if (!room) return;
     for (const p of room.players) {
       playerToRoom.delete(p.id);
-      const timer = disconnectTimers.get(p.id);
-      if (timer) {
-        clearTimeout(timer);
-        disconnectTimers.delete(p.id);
+      if (p.userId) {
+        if (userIdToRoom.get(p.userId) === roomId) userIdToRoom.delete(p.userId);
+        if (p.socketId && userIdToSocket.get(p.userId) === p.socketId) {
+          userIdToSocket.delete(p.userId);
+        }
       }
     }
     rooms.delete(roomId);
   }
   function emitGameOver(room) {
+    recordBattle(room);
     const winner = room.players.find((p) => p.id === room.winnerId);
     for (const p of room.players) {
       if (p.socketId) {
@@ -1082,6 +1275,7 @@ function setupSocket(io2) {
           winnerId: room.winnerId,
           winnerName: winner?.name ?? null,
           isDraw: room.isDraw,
+          reason: room.endReason,
           state: buildStateView(room, p.id)
         };
         io2.to(p.socketId).emit("battle:gameOver", payload);
@@ -1092,19 +1286,16 @@ function setupSocket(io2) {
     const room = roomOf(playerId);
     if (!room || room.phase === "GAME_OVER") return;
     BattleEngine.handleDisconnect(room, playerId);
+    const winner = room.players.find((p) => p.id === room.winnerId);
+    const loser = room.players.find((p) => p.id === playerId);
+    room.log.push({
+      type: "VICTORY",
+      actorId: winner?.id,
+      actorName: winner?.name,
+      description: `${loser?.name} \u65AD\u7EBF\uFF0C${winner?.name} \u83B7\u80DC\uFF01`
+    });
     emitGameOver(room);
     cleanupRoom(room.id);
-  }
-  function beginDisconnectGrace(playerId) {
-    const room = roomOf(playerId);
-    if (!room) return;
-    const player = room.players.find((p) => p.id === playerId);
-    if (!player) return;
-    player.connected = false;
-    player.socketId = null;
-    emitState(room);
-    const timer = setTimeout(() => forfeitPlayer(playerId), DISCONNECT_GRACE_MS);
-    disconnectTimers.set(playerId, timer);
   }
   io2.on("connection", (socket) => {
     socket.data.playerId = null;
@@ -1112,16 +1303,42 @@ function setupSocket(io2) {
       const playerId = typeof payload?.playerId === "string" ? payload.playerId : "";
       if (!VALID_PLAYER_ID.test(playerId)) return;
       socket.data.playerId = playerId;
+      const token = typeof payload?.token === "string" ? payload.token : "";
+      const userId = token ? findUserIdByToken(token) : null;
+      const userRow = userId ? findUserById(userId) : null;
+      socket.data.user = userRow ? {
+        id: userRow.id,
+        account: userRow.account,
+        nickname: userRow.nickname,
+        avatar: userRow.avatar
+      } : null;
+      if (userId) {
+        const oldSocketId = userIdToSocket.get(userId);
+        if (oldSocketId && oldSocketId !== socket.id) {
+          const oldSocket = io2.sockets.sockets.get(oldSocketId);
+          if (oldSocket) {
+            oldSocket.emit("session:kicked", { message: "\u8D26\u53F7\u5DF2\u5728\u522B\u5904\u767B\u5F55\uFF0C\u5DF2\u4E0B\u7EBF" });
+            oldSocket.disconnect(true);
+          }
+        }
+        userIdToSocket.set(userId, socket.id);
+        const battleRoomId = userIdToRoom.get(userId);
+        const battleRoom = battleRoomId ? rooms.get(battleRoomId) : void 0;
+        const battlePlayer = battleRoom?.players.find((p) => p.userId === userId);
+        if (battleRoom && battlePlayer && battleRoom.phase !== "GAME_OVER") {
+          battlePlayer.socketId = socket.id;
+          battlePlayer.connected = true;
+          socket.data.playerId = battlePlayer.id;
+          socket.emit("session:restored", { playerId: battlePlayer.id });
+          socket.emit("battle:state", buildStateView(battleRoom, battlePlayer.id));
+          return;
+        }
+      }
       const room = roomOf(playerId);
       const player = room?.players.find((p) => p.id === playerId);
       if (room && player && !player.connected) {
         player.socketId = socket.id;
         player.connected = true;
-        const timer = disconnectTimers.get(playerId);
-        if (timer) {
-          clearTimeout(timer);
-          disconnectTimers.delete(playerId);
-        }
         socket.emit("session:restored", { playerId });
         socket.emit("battle:state", buildStateView(room, playerId));
       } else {
@@ -1139,18 +1356,26 @@ function setupSocket(io2) {
         }
         cleanupRoom(existing.id);
       }
-      const player = createPlayerState(playerId, socket.id, "");
+      const user = socket.data.user;
+      const nickname = user?.nickname ?? `\u6E38\u5BA2${playerId.slice(0, 4)}`;
+      const player = createPlayerState(
+        playerId,
+        socket.id,
+        nickname,
+        user ? { userId: user.id, account: user.account, avatar: user.avatar } : null
+      );
       const opponent = queue.join(player);
       if (!opponent) {
         socket.emit("queue:waiting", { message: "\u7B49\u5F85\u5176\u4ED6\u73A9\u5BB6\u52A0\u5165\u2026\u2026" });
         return;
       }
-      opponent.name = "\u73A9\u5BB61";
-      player.name = "\u73A9\u5BB62";
       const room = BattleEngine.createRoom(opponent, player);
       rooms.set(room.id, room);
       playerToRoom.set(opponent.id, room.id);
       playerToRoom.set(player.id, room.id);
+      for (const p of room.players) {
+        if (p.userId) userIdToRoom.set(p.userId, room.id);
+      }
       for (const p of room.players) {
         if (p.socketId) {
           io2.to(p.socketId).emit("queue:matched", {
@@ -1207,6 +1432,7 @@ function setupSocket(io2) {
       emitState(room);
       if (room.players.every((p) => p.currentAction)) {
         const resolution = BattleEngine.resolveTurn(room);
+        room.log.push(...resolution.events);
         for (const p of room.players) {
           if (p.socketId) {
             const payload2 = {
@@ -1272,10 +1498,22 @@ function setupSocket(io2) {
       const room = roomOf(playerId);
       if (!room || room.phase === "GAME_OVER") return;
       BattleEngine.surrender(room, playerId);
+      const winner = room.players.find((p) => p.id === room.winnerId);
+      const loser = room.players.find((p) => p.id === playerId);
+      room.log.push({
+        type: "VICTORY",
+        actorId: winner?.id,
+        actorName: winner?.name,
+        description: `${loser?.name} \u8BA4\u8F93\uFF0C${winner?.name} \u83B7\u80DC\uFF01`
+      });
       emitGameOver(room);
       cleanupRoom(room.id);
     });
     socket.on("disconnect", () => {
+      const userId = socket.data.user?.id;
+      if (userId && userIdToSocket.get(userId) === socket.id) {
+        userIdToSocket.delete(userId);
+      }
       const playerId = socket.data.playerId;
       if (!playerId) return;
       if (queue.has(playerId)) {
@@ -1286,14 +1524,223 @@ function setupSocket(io2) {
       if (!room || room.phase === "GAME_OVER") return;
       const player = room.players.find((p) => p.id === playerId);
       if (!player || player.socketId !== socket.id) return;
-      beginDisconnectGrace(playerId);
+      forfeitPlayer(playerId);
     });
   });
 }
 
+// src/routes/auth.ts
+import { Router } from "express";
+
+// src/auth/token.ts
+import { randomBytes } from "crypto";
+function generateToken() {
+  return randomBytes(32).toString("hex");
+}
+
+// src/auth/password.ts
+import { randomBytes as randomBytes2, scryptSync, timingSafeEqual } from "crypto";
+var KEY_LEN = 64;
+function hashPassword(password) {
+  const salt = randomBytes2(16).toString("hex");
+  const hash = scryptSync(password, salt, KEY_LEN).toString("hex");
+  return `${salt}:${hash}`;
+}
+function verifyPassword(password, stored) {
+  const idx = stored.indexOf(":");
+  if (idx <= 0) return false;
+  const salt = stored.slice(0, idx);
+  const expected = Buffer.from(stored.slice(idx + 1), "hex");
+  if (expected.length !== KEY_LEN) return false;
+  const candidate = scryptSync(password, salt, KEY_LEN);
+  return timingSafeEqual(candidate, expected);
+}
+
+// src/auth/avatar.ts
+import { randomUUID as randomUUID3 } from "crypto";
+import { mkdirSync as mkdirSync2, writeFileSync } from "fs";
+import { dirname as dirname3, resolve as resolve2 } from "path";
+var AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+var AVATAR_EXT = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+  "image/gif": ".gif"
+};
+function resolveAvatar(input) {
+  if (!input || input === DEFAULT_AVATAR || input.startsWith("/assets/")) {
+    return { path: DEFAULT_AVATAR };
+  }
+  const m = /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(input);
+  if (!m) return { path: DEFAULT_AVATAR, error: "\u5934\u50CF\u683C\u5F0F\u4E0D\u652F\u6301" };
+  const mime = m[1];
+  let buf;
+  try {
+    buf = Buffer.from(m[2], "base64");
+  } catch {
+    return { path: DEFAULT_AVATAR, error: "\u5934\u50CF\u6570\u636E\u65E0\u6548" };
+  }
+  if (buf.length === 0) return { path: DEFAULT_AVATAR, error: "\u5934\u50CF\u6570\u636E\u4E3A\u7A7A" };
+  if (buf.length > AVATAR_MAX_BYTES) {
+    return { path: DEFAULT_AVATAR, error: "\u5934\u50CF\u5927\u5C0F\u4E0D\u80FD\u8D85\u8FC7 2MB" };
+  }
+  const filename = `${randomUUID3()}${AVATAR_EXT[mime]}`;
+  const filepath = resolve2(config.uploadsDir, "avatars", filename);
+  mkdirSync2(dirname3(filepath), { recursive: true });
+  writeFileSync(filepath, buf);
+  return { path: `/uploads/avatars/${filename}` };
+}
+
+// src/middleware/auth.ts
+function requireAuth(req, res, next) {
+  const auth = req.headers.authorization ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  const userId = token ? findUserIdByToken(token) : null;
+  if (!userId) {
+    res.status(401).json({ success: false, message: "\u672A\u767B\u5F55" });
+    return;
+  }
+  req.userId = userId;
+  next();
+}
+
+// src/routes/auth.ts
+function toAuthUser(row) {
+  return {
+    id: row.id,
+    account: row.account,
+    nickname: row.nickname,
+    avatar: row.avatar
+  };
+}
+function setupAuthRoutes() {
+  const router = Router();
+  router.post("/register", (req, res) => {
+    const body = req.body ?? {};
+    const account = typeof body.account === "string" ? body.account.trim() : "";
+    const password = typeof body.password === "string" ? body.password : "";
+    const nickname = typeof body.nickname === "string" ? body.nickname.trim() : "";
+    const avatar = typeof body.avatar === "string" ? body.avatar : void 0;
+    if (!isSixDigitAccount(account)) {
+      return res.status(400).json({ success: false, code: "INVALID_ACCOUNT", message: "\u8D26\u53F7\u5FC5\u987B\u4E3A6\u4F4D\u6570\u5B57" });
+    }
+    const pwResult = validatePassword(password);
+    if (!pwResult.ok) {
+      return res.status(400).json({ success: false, code: "WEAK_PASSWORD", message: pwResult.message });
+    }
+    const nickResult = validateNickname(nickname);
+    if (!nickResult.ok) {
+      return res.status(400).json({ success: false, code: "INVALID_NICKNAME", message: nickResult.message });
+    }
+    if (findUserByAccount(account)) {
+      return res.status(409).json({ success: false, code: "ACCOUNT_EXISTS", message: "\u8D26\u53F7\u5DF2\u5B58\u5728\uFF01" });
+    }
+    const avatarResult = resolveAvatar(avatar);
+    if (avatarResult.error) {
+      return res.status(400).json({ success: false, code: "INVALID_AVATAR", message: avatarResult.error });
+    }
+    const user = createUser({
+      account,
+      passwordHash: hashPassword(password),
+      nickname,
+      avatar: avatarResult.path
+    });
+    const token = generateToken();
+    createSession(token, user.id);
+    res.json({ success: true, token, user: toAuthUser(user) });
+  });
+  router.post("/login", (req, res) => {
+    const body = req.body ?? {};
+    const account = typeof body.account === "string" ? body.account.trim() : "";
+    const password = typeof body.password === "string" ? body.password : "";
+    const user = findUserByAccount(account);
+    if (!user || !verifyPassword(password, user.password_hash)) {
+      return res.status(401).json({ success: false, message: "\u8D26\u53F7\u6216\u5BC6\u7801\u9519\u8BEF" });
+    }
+    deleteSessionsForUser(user.id);
+    const token = generateToken();
+    createSession(token, user.id);
+    res.json({ success: true, token, user: toAuthUser(user) });
+  });
+  router.get("/me", requireAuth, (req, res) => {
+    const userId = req.userId;
+    const user = findUserById(userId);
+    if (!user) {
+      return res.status(401).json({ success: false, message: "\u8D26\u53F7\u4E0D\u5B58\u5728" });
+    }
+    res.json({ success: true, user: toAuthUser(user) });
+  });
+  return router;
+}
+
+// src/routes/battles.ts
+import { Router as Router2 } from "express";
+function player1(row) {
+  return {
+    userId: row.p1_user_id,
+    account: row.p1_account,
+    nickname: row.p1_nickname,
+    avatar: row.p1_avatar
+  };
+}
+function player2(row) {
+  return {
+    userId: row.p2_user_id,
+    account: row.p2_account,
+    nickname: row.p2_nickname,
+    avatar: row.p2_avatar
+  };
+}
+function setupBattleRoutes() {
+  const router = Router2();
+  router.get("/history", requireAuth, (req, res) => {
+    const userId = req.userId;
+    const rows = listBattlesForUser(userId);
+    const battles = rows.map((row) => {
+      const isP1 = row.p1_user_id === userId;
+      const opponent = isP1 ? player2(row) : player1(row);
+      const result = row.is_draw ? "draw" : row.winner_id === userId ? "win" : "lose";
+      return { id: row.id, opponent, result, createdAt: row.created_at };
+    });
+    const wins = battles.filter((b) => b.result === "win").length;
+    res.json({ success: true, battles, total: battles.length, wins });
+  });
+  router.get("/:id", requireAuth, (req, res) => {
+    const userId = req.userId;
+    const row = getBattleById(req.params.id);
+    if (!row) {
+      return res.status(404).json({ success: false, message: "\u5BF9\u5C40\u4E0D\u5B58\u5728" });
+    }
+    if (row.p1_user_id !== userId && row.p2_user_id !== userId) {
+      return res.status(403).json({ success: false, message: "\u65E0\u6743\u67E5\u770B\u8BE5\u5BF9\u5C40" });
+    }
+    let battleLog = [];
+    try {
+      battleLog = JSON.parse(row.battle_log);
+    } catch {
+      battleLog = [];
+    }
+    const battle = {
+      id: row.id,
+      player1: player1(row),
+      player2: player2(row),
+      winnerId: row.winner_id,
+      isDraw: !!row.is_draw,
+      createdAt: row.created_at,
+      battleLog
+    };
+    res.json({ success: true, battle });
+  });
+  return router;
+}
+
 // src/index.ts
+initDatabase();
+mkdirSync3(resolve3(config.uploadsDir, "avatars"), { recursive: true });
 var app = express();
 var httpServer = createServer(app);
+app.use(express.json({ limit: "8mb" }));
+app.use("/uploads", express.static(config.uploadsDir));
 var io = new Server(httpServer, {
   cors: {
     origin: config.clientOrigin,
@@ -1307,9 +1754,13 @@ app.get("/health", (_req, res) => {
     time: (/* @__PURE__ */ new Date()).toISOString()
   });
 });
+app.use("/api/auth", setupAuthRoutes());
+app.use("/api/battles", setupBattleRoutes());
 setupSocket(io);
 httpServer.listen(config.port, () => {
   console.log(`[server] \u6D1B\u514B\u738B\u56FD\u4E3B\u5BA0PK \u670D\u52A1\u7AEF\u5DF2\u542F\u52A8\uFF0C\u7AEF\u53E3 ${config.port}`);
   console.log(`[server] \u5141\u8BB8\u7684\u524D\u7AEF\u6765\u6E90(CORS): ${config.clientOrigin}`);
   console.log(`[server] \u73AF\u5883: ${config.nodeEnv}`);
+  console.log(`[server] \u6570\u636E\u5E93: ${config.dbPath}`);
+  console.log(`[server] \u5934\u50CF\u76EE\u5F55: ${resolve3(config.uploadsDir, "avatars")}`);
 });

@@ -13,6 +13,11 @@ export default defineConfig({
       // 允许访问 workspace 根目录，以解析共享包源码
       allow: ['..'],
     },
+    proxy: {
+      // 开发环境：把 API / 头像请求转发到本地后端
+      '/api': 'http://localhost:3000',
+      '/uploads': 'http://localhost:3000',
+    },
   },
   build: {
     outDir: 'dist',

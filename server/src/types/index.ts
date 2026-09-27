@@ -1,6 +1,8 @@
 import type {
   BattleAction,
+  BattleEvent,
   BattlePhase,
+  GameOverReason,
   PassiveState,
   PetDefinition,
   PetStatus,
@@ -23,6 +25,13 @@ export interface PlayerState {
   id: string;
   socketId: string | null;
   name: string;
+  /** 正式账号 userId；游客为 null */
+  userId: string | null;
+  /** 6 位账号（游客为空） */
+  account: string;
+  /** 头像 URL */
+  avatar: string;
+  isGuest: boolean;
   pets: PetInstance[];
   /** 当前出战宠物实例 id */
   activePetId: string | null;
@@ -44,6 +53,10 @@ export interface BattleRoom {
   isDraw: boolean;
   forcedSwitchPlayerIds: string[];
   createdAt: number;
+  /** 整场战斗累积的日志（用于持久化历史对局） */
+  log: BattleEvent[];
+  /** 战斗结束原因（结算时写入，用于通知客户端） */
+  endReason?: GameOverReason;
 }
 
 export type { BattleAction, BattlePhase };

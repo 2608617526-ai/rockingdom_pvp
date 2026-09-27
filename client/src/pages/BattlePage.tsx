@@ -7,33 +7,40 @@ import type {
 import {
   PET_DEFINITIONS,
   SKILL_DEFINITIONS,
-  effectiveSkillCost,
+  getActualSkillCost,
 } from '@rockingdom/shared';
 import type { GameController } from '../hooks/useGame';
+import type { CurrentUser } from '../auth/user';
 import type { FloatingNumber, PetAnimState } from '../types';
 import PetSprite from '../components/PetSprite';
+import UserBadge from '../components/UserBadge';
 import HPBar from '../components/HPBar';
 import EnergyBar from '../components/EnergyBar';
 import SkillCard from '../components/SkillCard';
 import BattleLog from '../components/BattleLog';
+import BattleFx from '../components/BattleFx';
 import FloatingNumberLayer from '../components/FloatingNumberLayer';
 import { playBGM, playSFX } from '../audio';
 
 interface Props {
   game: GameController;
+  user: CurrentUser;
 }
 
 type Side = 'self' | 'opponent';
 
-export default function BattlePage({ game }: Props) {
+export default function BattlePage({ game, user }: Props) {
   const [petAnim, setPetAnim] = useState<Partial<Record<Side, PetAnimState>>>({});
   const [floaters, setFloaters] = useState<FloatingNumber[]>([]);
   const [log, setLog] = useState<BattleEvent[]>([]);
   const [animating, setAnimating] = useState(false);
   const [switchPanelOpen, setSwitchPanelOpen] = useState(false);
   const [fleeArmed, setFleeArmed] = useState(false);
+  const [fx, setFx] = useState<{ id: number; side: Side; kind: 'attack' | 'hit' } | null>(null);
+  const [shaking, setShaking] = useState(false);
 
   const floaterIdRef = useRef(0);
+  const fxIdRef = useRef(0);
 
   useEffect(() => {
     playBGM('battle');
@@ -62,16 +69,28 @@ export default function BattlePage({ game }: Props) {
       setFloaters((list) => [...list, { ...f, id: floaterIdRef.current }]);
     };
 
+    const triggerFx = (side: Side, kind: 'attack' | 'hit') => {
+      fxIdRef.current += 1;
+      setFx({ id: fxIdRef.current, side, kind });
+    };
+    const triggerShake = () => {
+      setShaking(true);
+      window.setTimeout(() => setShaking(false), 450);
+    };
+
     for (const ev of events) {
       schedule(() => {
         switch (ev.type) {
           case 'ATTACK': {
             setPetAnim((a) => ({ ...a, [sideOf(ev.actorId)]: 'attack' }));
+            triggerFx(sideOf(ev.actorId), 'attack');
             playSFX('attack');
             break;
           }
           case 'DAMAGE': {
             setPetAnim((a) => ({ ...a, [sideOf(ev.targetId)]: 'hit' }));
+            triggerFx(sideOf(ev.targetId), 'hit');
+            triggerShake();
             addFloater({
               side: sideOf(ev.targetId),
               value: -(ev.value ?? 0),
@@ -140,6 +159,7 @@ export default function BattlePage({ game }: Props) {
       setAnimating(false);
       setPetAnim({});
       setFloaters([]);
+      setFx(null);
     }, delay + 200);
 
     return () => timers.forEach(clearTimeout);
@@ -209,50 +229,14 @@ export default function BattlePage({ game }: Props) {
   return (
     <div className="page page--battle">
       <div className="battle-topbar">
+        <UserBadge user={user} className="user-badge--static" />
         <span className="battle-turn">第 {state?.turn ?? 1} 回合</span>
         <span className="battle-phase">{phaseLabel}</span>
         {!game.connected && <span className="battle-reconnect">重连中……</span>}
       </div>
 
-      <div className="battle-arena">
-        <div className="battle-player battle-player--opponent">
-          <div className="battle-player__info">
-            <div className="battle-player__name">{opp?.name}</div>
-            <HPBar
-              hp={oppActive?.hp ?? 0}
-              maxHp={oppActive?.maxHp ?? 1}
-              side="opponent"
-            />
-            <EnergyBar
-              energy={oppActive?.energy ?? 0}
-              maxEnergy={oppActive?.maxEnergy ?? 10}
-            />
-          </div>
-          {oppActive && (
-            <div className="battle-player__sprite" key={oppActive.instanceId}>
-              <PetSprite
-                petId={oppActive.petId}
-                element={oppActive.element}
-                anim={spriteAnim(oppActive, 'opponent')}
-                size={190}
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="battle-vs">VS</div>
-
+      <div className={`battle-arena ${shaking ? 'battle-arena--shake' : ''}`}>
         <div className="battle-player battle-player--self">
-          {selfActive && (
-            <div className="battle-player__sprite" key={selfActive.instanceId}>
-              <PetSprite
-                petId={selfActive.petId}
-                element={selfActive.element}
-                anim={spriteAnim(selfActive, 'self')}
-                size={190}
-              />
-            </div>
-          )}
           <div className="battle-player__info">
             <div className="battle-player__name">{self?.name}</div>
             <HPBar
@@ -265,16 +249,54 @@ export default function BattlePage({ game }: Props) {
               maxEnergy={selfActive?.maxEnergy ?? 10}
             />
           </div>
+          {selfActive && (
+            <div className="battle-player__sprite" key={selfActive.instanceId}>
+              <PetSprite
+                petId={selfActive.petId}
+                element={selfActive.element}
+                anim={spriteAnim(selfActive, 'self')}
+                size={190}
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="battle-vs">VS</div>
+
+        <div className="battle-player battle-player--opponent">
+          {oppActive && (
+            <div className="battle-player__sprite" key={oppActive.instanceId}>
+              <PetSprite
+                petId={oppActive.petId}
+                element={oppActive.element}
+                anim={spriteAnim(oppActive, 'opponent')}
+                size={190}
+              />
+            </div>
+          )}
+          <div className="battle-player__info">
+            <div className="battle-player__name">{opp?.name}</div>
+            <HPBar
+              hp={oppActive?.hp ?? 0}
+              maxHp={oppActive?.maxHp ?? 1}
+              side="opponent"
+            />
+            <EnergyBar
+              energy={oppActive?.energy ?? 0}
+              maxEnergy={oppActive?.maxEnergy ?? 10}
+            />
+          </div>
         </div>
 
         <FloatingNumberLayer floaters={floaters} />
+        {fx && <BattleFx key={fx.id} side={fx.side} kind={fx.kind} />}
       </div>
 
       <div className="battle-controls">
         <div className="battle-skills">
           {skills.map((skill) => {
             const cost = selfActive
-              ? effectiveSkillCost(selfActive.petId, skill, selfActive.passive)
+              ? getActualSkillCost(selfActive.petId, skill, selfActive.passive)
               : skill.cost;
             const disabled = !canAct || selfActive == null || selfActive.energy < cost;
             return (

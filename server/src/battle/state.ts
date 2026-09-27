@@ -1,5 +1,6 @@
 import {
   createInitialPassiveState,
+  DEFAULT_AVATAR,
   PET_LIST,
   type PetDefinition,
 } from '@rockingdom/shared';
@@ -26,11 +27,16 @@ export function createPlayerState(
   id: string,
   socketId: string,
   name: string,
+  user: { userId: string; account: string; avatar: string } | null = null,
 ): PlayerState {
   return {
     id,
     socketId,
     name,
+    userId: user?.userId ?? null,
+    account: user?.account ?? '',
+    avatar: user?.avatar ?? DEFAULT_AVATAR,
+    isGuest: !user,
     pets: createPetInstances(PET_LIST, id),
     activePetId: null,
     selectedStarter: null,

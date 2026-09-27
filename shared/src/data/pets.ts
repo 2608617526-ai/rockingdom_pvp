@@ -20,8 +20,8 @@ export const PET_DEFINITIONS: Record<string, PetDefinition> = {
     },
     initialEnergy: 10,
     maxEnergy: 10,
-    passiveName: '烈火之怒',
-    passiveDescription: '每成功使用一次技能，物理攻击提升 30%（基于基础值，持续整场战斗）。',
+    passiveName: '炽热战意',
+    passiveDescription: '每次使用技能后，物理攻击力提高 30%。',
     skillIds: ['fire_blow', 'fire_cart', 'fire_shield', 'mountain_fire', 'charge'],
   },
   water: {
@@ -38,8 +38,8 @@ export const PET_DEFINITIONS: Record<string, PetDefinition> = {
     },
     initialEnergy: 10,
     maxEnergy: 10,
-    passiveName: '圣水流转',
-    passiveDescription: '每成功使用一次技能，下一次使用技能的能量消耗降低 2。',
+    passiveName: '节能施法',
+    passiveDescription: '每次使用技能后，下一次技能的能量消耗降低 2 点，最低不会低于 0。',
     skillIds: ['moisture', 'bubble_shield', 'deluge', 'bubble', 'charge'],
   },
   grass: {
@@ -56,8 +56,8 @@ export const PET_DEFINITIONS: Record<string, PetDefinition> = {
     },
     initialEnergy: 10,
     maxEnergy: 10,
-    passiveName: '光合蓄力',
-    passiveDescription: '每回复一次能量，下一次攻击技能伤害提升 20%（可叠加）。',
+    passiveName: '自然之力',
+    passiveDescription: '每次恢复 1 点能量后，下一次攻击技能伤害提高 20%。如果下一回合没有使用攻击技能，效果不会消失。',
     skillIds: ['sieve_flow', 'enzyme', 'cactus', 'photosynthesis', 'charge'],
   },
 };

@@ -10,13 +10,22 @@ export default function GameOverPage({ game }: Props) {
   const state = game.gameState;
   const isDraw = state?.isDraw ?? false;
   const isWinner = state?.winnerId === state?.self.id;
+  const reason = game.gameOverReason;
 
-  const title = isDraw ? '平局' : isWinner ? '恭喜你获得了胜利' : '很遗憾您在此次战斗中略逊一筹';
-  const subtitle = isDraw
-    ? '双方势均力敌，不分胜负'
-    : isWinner
-      ? '你击败了对手，赢得了这场对战！'
-      : '再接再厉，下次一定能赢！';
+  let title: string;
+  let subtitle: string;
+  if (isDraw) {
+    title = '平局';
+    subtitle = '双方势均力敌，不分胜负';
+  } else if (isWinner) {
+    title = '恭喜你获得了胜利';
+    if (reason === 'DISCONNECT') subtitle = '对手已掉线，您自动获得了胜利';
+    else if (reason === 'SURRENDER') subtitle = '对手认输，您获得了胜利';
+    else subtitle = '你击败了对手，赢得了这场对战！';
+  } else {
+    title = '很遗憾您在此次战斗中略逊一筹';
+    subtitle = '再接再厉，下次一定能赢！';
+  }
 
   return (
     <div className={`page page--gameover ${isWinner ? 'page--win' : 'page--lose'}`}>

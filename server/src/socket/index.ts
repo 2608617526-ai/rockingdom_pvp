@@ -1,16 +1,19 @@
 import type { Server, Socket } from 'socket.io';
 import type {
+  AuthUser,
   BattleAction,
   BattleStateView,
   GameOverPayload,
   TurnResultPayload,
 } from '@rockingdom/shared';
-import { DISCONNECT_GRACE_MS } from '@rockingdom/shared';
 import type { BattleRoom } from '../types';
 import { createPlayerState } from '../battle/state';
 import { BattleEngine } from '../battle/BattleEngine';
 import { buildStateView } from '../battle/serialize';
 import { MatchmakingQueue } from '../matchmaking';
+import { findUserIdByToken } from '../db/sessions';
+import { findUserById } from '../db/users';
+import { recordBattle } from '../history';
 
 const VALID_PLAYER_ID = /^[a-zA-Z0-9_-]{6,64}$/;
 
@@ -18,7 +21,10 @@ export function setupSocket(io: Server): void {
   const queue = new MatchmakingQueue();
   const rooms = new Map<string, BattleRoom>();
   const playerToRoom = new Map<string, string>();
-  const disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  // 正式账号 → 当前活动 socket（用于异地登录踢下线）
+  const userIdToSocket = new Map<string, string>();
+  // 正式账号 → 所在战斗房间（用于异地登录接续战斗）
+  const userIdToRoom = new Map<string, string>();
 
   function roomOf(playerId: string): BattleRoom | undefined {
     const roomId = playerToRoom.get(playerId);
@@ -38,16 +44,19 @@ export function setupSocket(io: Server): void {
     if (!room) return;
     for (const p of room.players) {
       playerToRoom.delete(p.id);
-      const timer = disconnectTimers.get(p.id);
-      if (timer) {
-        clearTimeout(timer);
-        disconnectTimers.delete(p.id);
+      if (p.userId) {
+        if (userIdToRoom.get(p.userId) === roomId) userIdToRoom.delete(p.userId);
+        if (p.socketId && userIdToSocket.get(p.userId) === p.socketId) {
+          userIdToSocket.delete(p.userId);
+        }
       }
     }
     rooms.delete(roomId);
   }
 
   function emitGameOver(room: BattleRoom): void {
+    // 战斗结束 → 先持久化历史战绩，再通知双方客户端
+    recordBattle(room);
     const winner = room.players.find((p) => p.id === room.winnerId);
     for (const p of room.players) {
       if (p.socketId) {
@@ -55,6 +64,7 @@ export function setupSocket(io: Server): void {
           winnerId: room.winnerId,
           winnerName: winner?.name ?? null,
           isDraw: room.isDraw,
+          reason: room.endReason,
           state: buildStateView(room, p.id),
         };
         io.to(p.socketId).emit('battle:gameOver', payload);
@@ -66,43 +76,75 @@ export function setupSocket(io: Server): void {
     const room = roomOf(playerId);
     if (!room || room.phase === 'GAME_OVER') return;
     BattleEngine.handleDisconnect(room, playerId);
+    const winner = room.players.find((p) => p.id === room.winnerId);
+    const loser = room.players.find((p) => p.id === playerId);
+    room.log.push({
+      type: 'VICTORY',
+      actorId: winner?.id,
+      actorName: winner?.name,
+      description: `${loser?.name} 断线，${winner?.name} 获胜！`,
+    });
     emitGameOver(room);
     cleanupRoom(room.id);
-  }
-
-  function beginDisconnectGrace(playerId: string): void {
-    const room = roomOf(playerId);
-    if (!room) return;
-    const player = room.players.find((p) => p.id === playerId);
-    if (!player) return;
-    player.connected = false;
-    player.socketId = null;
-    emitState(room);
-    const timer = setTimeout(() => forfeitPlayer(playerId), DISCONNECT_GRACE_MS);
-    disconnectTimers.set(playerId, timer);
   }
 
   io.on('connection', (socket: Socket) => {
     socket.data.playerId = null;
 
     // 客户端在（重）连接时上报自己的稳定身份；若仍在战斗则恢复
-    socket.on('session:hello', (payload: { playerId?: unknown }) => {
+    socket.on('session:hello', (payload: { playerId?: unknown; token?: unknown }) => {
       const playerId =
         typeof payload?.playerId === 'string' ? payload.playerId : '';
       if (!VALID_PLAYER_ID.test(playerId)) return;
       socket.data.playerId = playerId;
 
+      // 解析登录 token → 关联正式账号（游客则无）。只保留公开字段，绝不携带密码哈希。
+      const token = typeof payload?.token === 'string' ? payload.token : '';
+      const userId = token ? findUserIdByToken(token) : null;
+      const userRow = userId ? findUserById(userId) : null;
+      socket.data.user = userRow
+        ? {
+            id: userRow.id,
+            account: userRow.account,
+            nickname: userRow.nickname,
+            avatar: userRow.avatar,
+          }
+        : null;
+
+      // === 异地登录：单账号单会话 ===
+      if (userId) {
+        // 1) 挤掉该账号之前的旧连接
+        const oldSocketId = userIdToSocket.get(userId);
+        if (oldSocketId && oldSocketId !== socket.id) {
+          const oldSocket = io.sockets.sockets.get(oldSocketId);
+          if (oldSocket) {
+            oldSocket.emit('session:kicked', { message: '账号已在别处登录，已下线' });
+            oldSocket.disconnect(true);
+          }
+        }
+        userIdToSocket.set(userId, socket.id);
+
+        // 2) 若该账号正在战斗中，把战斗迁移到当前连接
+        const battleRoomId = userIdToRoom.get(userId);
+        const battleRoom = battleRoomId ? rooms.get(battleRoomId) : undefined;
+        const battlePlayer = battleRoom?.players.find((p) => p.userId === userId);
+        if (battleRoom && battlePlayer && battleRoom.phase !== 'GAME_OVER') {
+          battlePlayer.socketId = socket.id;
+          battlePlayer.connected = true;
+          // 覆盖当前连接身份为战斗中的玩家 id（宠物实例 id 等都以它为准）
+          socket.data.playerId = battlePlayer.id;
+          socket.emit('session:restored', { playerId: battlePlayer.id });
+          socket.emit('battle:state', buildStateView(battleRoom, battlePlayer.id));
+          return;
+        }
+      }
+
+      // === 游客 / 未在战斗中的重连恢复 ===
       const room = roomOf(playerId);
       const player = room?.players.find((p) => p.id === playerId);
       if (room && player && !player.connected) {
-        // 重连恢复
         player.socketId = socket.id;
         player.connected = true;
-        const timer = disconnectTimers.get(playerId);
-        if (timer) {
-          clearTimeout(timer);
-          disconnectTimers.delete(playerId);
-        }
         socket.emit('session:restored', { playerId });
         socket.emit('battle:state', buildStateView(room, playerId));
       } else {
@@ -123,19 +165,27 @@ export function setupSocket(io: Server): void {
         cleanupRoom(existing.id);
       }
 
-      const player = createPlayerState(playerId, socket.id, '');
+      const user = socket.data.user as AuthUser | null | undefined;
+      const nickname = user?.nickname ?? `游客${playerId.slice(0, 4)}`;
+      const player = createPlayerState(
+        playerId,
+        socket.id,
+        nickname,
+        user ? { userId: user.id, account: user.account, avatar: user.avatar } : null,
+      );
       const opponent = queue.join(player);
       if (!opponent) {
         socket.emit('queue:waiting', { message: '等待其他玩家加入……' });
         return;
       }
 
-      opponent.name = '玩家1';
-      player.name = '玩家2';
       const room = BattleEngine.createRoom(opponent, player);
       rooms.set(room.id, room);
       playerToRoom.set(opponent.id, room.id);
       playerToRoom.set(player.id, room.id);
+      for (const p of room.players) {
+        if (p.userId) userIdToRoom.set(p.userId, room.id);
+      }
 
       for (const p of room.players) {
         if (p.socketId) {
@@ -198,6 +248,7 @@ export function setupSocket(io: Server): void {
 
       if (room.players.every((p) => p.currentAction)) {
         const resolution = BattleEngine.resolveTurn(room);
+        room.log.push(...resolution.events);
         for (const p of room.players) {
           if (p.socketId) {
             const payload: TurnResultPayload = {
@@ -269,11 +320,25 @@ export function setupSocket(io: Server): void {
       const room = roomOf(playerId);
       if (!room || room.phase === 'GAME_OVER') return;
       BattleEngine.surrender(room, playerId);
+      const winner = room.players.find((p) => p.id === room.winnerId);
+      const loser = room.players.find((p) => p.id === playerId);
+      room.log.push({
+        type: 'VICTORY',
+        actorId: winner?.id,
+        actorName: winner?.name,
+        description: `${loser?.name} 认输，${winner?.name} 获胜！`,
+      });
       emitGameOver(room);
       cleanupRoom(room.id);
     });
 
     socket.on('disconnect', () => {
+      // 清理该账号的活动 socket 映射
+      const userId = (socket.data.user as AuthUser | null | undefined)?.id;
+      if (userId && userIdToSocket.get(userId) === socket.id) {
+        userIdToSocket.delete(userId);
+      }
+
       const playerId = socket.data.playerId as string | null;
       if (!playerId) return;
       if (queue.has(playerId)) {
@@ -283,9 +348,10 @@ export function setupSocket(io: Server): void {
       const room = roomOf(playerId);
       if (!room || room.phase === 'GAME_OVER') return;
       const player = room.players.find((p) => p.id === playerId);
-      // 若已被新连接接管（重连），旧连接断开时不再判负
+      // 若已被新连接接管（异地登录迁移），旧连接断开时不再判负
       if (!player || player.socketId !== socket.id) return;
-      beginDisconnectGrace(playerId);
+      // 断线立即判负
+      forfeitPlayer(playerId);
     });
   });
 }

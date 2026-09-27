@@ -67,14 +67,14 @@ export interface PassiveState {
   mountainFireMultiplier: number;
   /** 武斗酷猫：每回复一次能量 +1，下次攻击消耗 */
   nextAttackBonusStacks: number;
-  /** 圣水守护：每使用一次技能 +2，下次技能消耗 */
-  skillCostReduction: number;
+  /** 圣水守护：下一次技能通用减耗（每使用一次技能 +2，下次技能结算时消耗并清零） */
+  nextSkillCostReduction: number;
   /** 圣水守护：魔法攻击倍率（润泽 → 2.7，水泡盾 ×1.7） */
   magicAttackMultiplier: number;
   /** 圣水守护：润泽是否已生效（每场战斗仅一次） */
   moistureApplied: boolean;
-  /** 圣水守护：天洪能耗是否已永久降为 1 */
-  tianhongCostReduced: boolean;
+  /** 圣水守护：天洪永久减耗（每成功应对一次状态技能 +6，只影响天洪，不消耗） */
+  heavenlyFloodCostReduction: number;
 }
 
 // ==============================
@@ -202,10 +202,14 @@ export interface ForceSwitchPayload {
   state: BattleStateView;
 }
 
+export type GameOverReason = 'DEFEAT' | 'FLEE' | 'SURRENDER' | 'DISCONNECT' | 'DRAW';
+
 export interface GameOverPayload {
   winnerId: string | null;
   winnerName: string | null;
   isDraw: boolean;
+  /** 战斗结束原因，客户端据此显示不同文案（如对手掉线/认输） */
+  reason?: GameOverReason;
   state: BattleStateView;
 }
 

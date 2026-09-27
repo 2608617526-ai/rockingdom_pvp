@@ -9,7 +9,8 @@ import {
   SIEVE_FLOW_BONUS_POWER,
   SIEVE_FLOW_HP_THRESHOLD,
   SKILL_DEFINITIONS,
-  effectiveSkillCost,
+  DELUGE_COST_REDUCTION_PER_COUNTER,
+  getActualSkillCost,
   type SkillDefinition,
 } from '@rockingdom/shared';
 import type { PetInstance, PlayerState } from '../types';
@@ -21,11 +22,12 @@ import {
   type TurnContext,
 } from './passives';
 
-/** 计算并扣除技能能耗（圣水守护的被动减耗由 shared 统一计算，这里负责“消耗并清空”） */
+/** 计算并扣除技能能耗（圣水守护的通用减耗在 shared 统一计算，这里负责“消耗并清空”） */
 function paySkillCost(pet: PetInstance, skill: SkillDefinition): number {
-  const cost = effectiveSkillCost(pet.def.id, skill, pet.passive);
+  const cost = getActualSkillCost(pet.def.id, skill, pet.passive);
   if (pet.def.id === 'water') {
-    pet.passive.skillCostReduction = 0;
+    // 消费圣水守护的「下一技能减耗」；天洪永久减耗不在此消费
+    pet.passive.nextSkillCostReduction = 0;
   }
   pet.energy = Math.max(0, pet.energy - cost);
   return cost;
@@ -79,16 +81,16 @@ export function resolveSkill(
   const skill: SkillDefinition | undefined = SKILL_DEFINITIONS[skillId];
   if (!skill) return;
 
-  // 天洪特殊应对：对方本回合使用状态技能 => 能耗永久降为 1
+  // 天洪特殊应对：对方本回合使用状态技能 => 天洪自身能耗永久 -6（可叠加，只影响天洪）
   if (skill.id === 'deluge' && opponent.currentAction?.type === 'SKILL') {
     const oppSkill = SKILL_DEFINITIONS[opponent.currentAction.skillId ?? ''];
-    if (oppSkill?.type === 'STATUS' && !pet.passive.tianhongCostReduced) {
-      pet.passive.tianhongCostReduced = true;
+    if (oppSkill?.type === 'STATUS') {
+      pet.passive.heavenlyFloodCostReduction += DELUGE_COST_REDUCTION_PER_COUNTER;
       ctx.events.push({
         type: 'BUFF',
         actorId: actor.id,
         petName: pet.def.name,
-        description: '天洪的特殊应对触发，能耗永久降为 1！',
+        description: '天洪成功应对状态技能，自身能耗永久减少 6！',
       });
     }
   }

@@ -1,4 +1,11 @@
-export type Screen = 'matchmaking' | 'starter' | 'battle' | 'gameover';
+export type Screen =
+  | 'welcome'
+  | 'register'
+  | 'login'
+  | 'matchmaking'
+  | 'starter'
+  | 'battle'
+  | 'gameover';
 
 export interface FloatingNumber {
   id: number;

@@ -26,3 +26,7 @@ Thumbs.db
 
 # Misc
 *.tsbuildinfo
+
+# Runtime data (SQLite DB + uploaded avatars)
+server/data/
+server/uploads/

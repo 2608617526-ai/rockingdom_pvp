@@ -50,7 +50,7 @@ export function applyAfterSkillPassives(
     });
   }
   if (pet.def.id === 'water') {
-    pet.passive.skillCostReduction += WATER_COST_REDUCTION_PER_SKILL;
+    pet.passive.nextSkillCostReduction += WATER_COST_REDUCTION_PER_SKILL;
   }
 }
 

@@ -33,6 +33,7 @@ export class BattleEngine {
       isDraw: false,
       forcedSwitchPlayerIds: [],
       createdAt: Date.now(),
+      log: [],
     };
   }
 
@@ -124,6 +125,7 @@ export class BattleEngine {
     room.phase = 'GAME_OVER';
     room.winnerId = winner?.id ?? null;
     room.isDraw = false;
+    room.endReason = 'SURRENDER';
     return { winnerId: winner?.id ?? null };
   }
 
@@ -136,6 +138,7 @@ export class BattleEngine {
     room.phase = 'GAME_OVER';
     room.winnerId = winner?.id ?? null;
     room.isDraw = false;
+    room.endReason = 'DISCONNECT';
     return { winnerId: winner?.id ?? null };
   }
 
@@ -166,6 +169,7 @@ export class BattleEngine {
           description: `${loser.name} 逃跑了！${winner.name} 获胜！`,
         });
       }
+      room.endReason = fleeA && fleeB ? 'DRAW' : 'FLEE';
       room.phase = 'GAME_OVER';
       return { events, gameOver: true };
     }
@@ -266,6 +270,7 @@ export class BattleEngine {
       room.phase = 'GAME_OVER';
       room.winnerId = victory.winnerId;
       room.isDraw = victory.isDraw;
+      room.endReason = victory.isDraw ? 'DRAW' : 'DEFEAT';
       if (victory.isDraw) {
         events.push({ type: 'VICTORY', description: '双方全部宠物阵亡，平局！' });
       } else {

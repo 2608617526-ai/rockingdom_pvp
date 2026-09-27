@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import type { PointerEvent as ReactPointerEvent, WheelEvent } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent, WheelEvent } from 'react';
 import {
   PET_LIST,
   SKILL_DEFINITIONS,
-  effectiveSkillCost,
+  getActualSkillCost,
   createInitialPassiveState,
+  type PetDefinition,
 } from '@rockingdom/shared';
 import type { GameController } from '../hooks/useGame';
+import type { CurrentUser } from '../auth/user';
 import PetSprite from '../components/PetSprite';
+import UserBadge from '../components/UserBadge';
 import Tooltip from '../components/Tooltip';
 import { SkillTooltipContent } from '../components/SkillCard';
 import ParticleBackground from '../components/ParticleBackground';
@@ -15,14 +18,33 @@ import { playBGM, playSFX } from '../audio';
 
 interface Props {
   game: GameController;
+  user: CurrentUser;
 }
 
 const TOTAL = PET_LIST.length;
+const PANEL_WIDTH = 280;
 
-/** 3 只宠物 3D 轮盘选择（滚轮 / 拖动 / 点击） */
-export default function StarterSelectionPage({ game }: Props) {
+interface PassiveInfo {
+  pet: PetDefinition;
+  rect: DOMRect;
+}
+
+/** 固定定位的特性面板：位于宠物卡片上方，水平方向夹紧在视口内 */
+function panelStyle(rect: DOMRect): CSSProperties {
+  const gap = 12;
+  const left = Math.max(
+    8,
+    Math.min(rect.left + rect.width / 2 - PANEL_WIDTH / 2, window.innerWidth - PANEL_WIDTH - 8),
+  );
+  return { left, top: rect.top - gap, width: PANEL_WIDTH };
+}
+
+/** 3 只宠物 3D 轮盘选择（滚轮 / 拖动 / 点击），悬停 / 点击查看特性 */
+export default function StarterSelectionPage({ game, user }: Props) {
   const [index, setIndex] = useState(1);
   const [confirmed, setConfirmed] = useState(false);
+  const [passive, setPassive] = useState<PassiveInfo | null>(null);
+  const [pinnedId, setPinnedId] = useState<string | null>(null);
   const dragStart = useRef<number | null>(null);
 
   useEffect(() => {
@@ -58,11 +80,29 @@ export default function StarterSelectionPage({ game }: Props) {
     playSFX('match');
   };
 
+  const onHover = (pet: PetDefinition, el: HTMLElement) => {
+    setPassive({ pet, rect: el.getBoundingClientRect() });
+  };
+  const onLeave = () => {
+    if (!pinnedId) setPassive(null);
+  };
+  const onPick = (pet: PetDefinition, i: number, el: HTMLElement) => {
+    setIndex(i);
+    if (pinnedId === pet.id) {
+      setPinnedId(null);
+      setPassive(null);
+    } else {
+      setPinnedId(pet.id);
+      setPassive({ pet, rect: el.getBoundingClientRect() });
+    }
+  };
+
   return (
     <div className="page page--starter">
       <ParticleBackground />
+      <UserBadge user={user} />
       <div className="starter-content">
-        <h2 className="starter-title">选择你的首发宠物</h2>
+        <h2 className="starter-title">请选择首发宠物</h2>
 
         <div
           className="carousel"
@@ -84,7 +124,9 @@ export default function StarterSelectionPage({ game }: Props) {
                 <div
                   key={pet.id}
                   className={cls}
-                  onClick={() => setIndex(i)}
+                  onClick={(e) => onPick(pet, i, e.currentTarget)}
+                  onMouseEnter={(e) => onHover(pet, e.currentTarget)}
+                  onMouseLeave={onLeave}
                 >
                   <PetSprite petId={pet.id} element={pet.element} size={200} />
                   <span className="carousel__name">{pet.name}</span>
@@ -98,7 +140,7 @@ export default function StarterSelectionPage({ game }: Props) {
           {selectedPet.skillIds.map((id) => {
             const skill = SKILL_DEFINITIONS[id];
             if (!skill) return null;
-            const cost = effectiveSkillCost(
+            const cost = getActualSkillCost(
               selectedPet.id,
               skill,
               createInitialPassiveState(),
@@ -133,6 +175,14 @@ export default function StarterSelectionPage({ game }: Props) {
           )}
         </div>
       </div>
+
+      {passive && (
+        <div className="passive-panel" style={panelStyle(passive.rect)}>
+          <div className="passive-panel__tag">⚡ 特性</div>
+          <div className="passive-panel__name">{passive.pet.passiveName}</div>
+          <div className="passive-panel__desc">{passive.pet.passiveDescription}</div>
+        </div>
+      )}
     </div>
   );
 }

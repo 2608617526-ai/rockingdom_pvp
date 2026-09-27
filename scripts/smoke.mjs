@@ -133,13 +133,14 @@ async function main() {
   const firstEvt = re.events.find((e) => e.type === 'ATTACK' || e.type === 'STATUS');
   check('天洪先于聚能执行', firstEvt?.type === 'ATTACK' && firstEvt?.skillName === '天洪', `首行动=${firstEvt?.description}`);
   const waterE = re.state.self.pets.find((p) => p.petId === 'water');
-  check('天洪能耗永久降为1', waterE.passive.tianhongCostReduced === true);
+  check('天洪第一次应对：永久减耗=6', waterE.passive.heavenlyFloodCostReduction === 6, `实际=${waterE.passive.heavenlyFloodCostReduction}`);
   check('天洪实际扣1能量(10→9)', waterE.energy === 9, `实际=${waterE.energy}`);
 
-  // 天洪能耗下限1：再使用一次天洪（此时被动减耗=2），仍应扣1而非0
+  // 天洪第二次应对：永久减耗=12，加上圣水守护通用减耗2 → 实际能耗 = max(0, 7-12-2) = 0
   const [re2] = await playTurn(E, F, { type: 'SKILL', skillId: 'deluge' }, { type: 'SKILL', skillId: 'charge' });
   const waterE2 = re2.state.self.pets.find((p) => p.petId === 'water');
-  check('天洪被动减耗后仍最低扣1(9→8)', waterE2.energy === 8, `实际=${waterE2.energy}`);
+  check('天洪第二次应对：永久减耗=12', waterE2.passive.heavenlyFloodCostReduction === 12, `实际=${waterE2.passive.heavenlyFloodCostReduction}`);
+  check('天洪第二次实际能耗=0(9→9)', waterE2.energy === 9, `实际=${waterE2.energy}`);
 
   // ============ 6. 死亡 + 强制换宠 ============
   console.log('死亡与强制换宠');

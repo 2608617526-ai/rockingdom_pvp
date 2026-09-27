@@ -4,9 +4,11 @@ import type {
   BattleEvent,
   BattlePhase,
   BattleStateView,
+  GameOverReason,
   PetId,
 } from '@rockingdom/shared';
 import { socket, getOrCreatePlayerId } from '../socket';
+import { getToken } from '../auth/user';
 import { playBGM, playSFX } from '../audio';
 import type { Screen } from '../types';
 
@@ -18,6 +20,7 @@ export interface GameController {
   matching: boolean;
   connectionError: string | null;
   connected: boolean;
+  gameOverReason: GameOverReason | undefined;
   joinQueue: () => void;
   leaveQueue: () => void;
   selectStarter: (petId: PetId) => void;
@@ -25,6 +28,14 @@ export interface GameController {
   confirmSwitch: (targetInstanceId: string) => void;
   surrender: () => void;
   resetToMatchmaking: () => void;
+  /** 退出队列 + 清空状态并回欢迎页（不退出登录） */
+  resetToWelcome: () => void;
+  goToWelcome: () => void;
+  goToLogin: () => void;
+  goToRegister: () => void;
+  guestLogin: () => void;
+  /** 登录/注册后重新上报 token，让服务器关联正式账号 */
+  refreshAuth: () => void;
 }
 
 function screenForPhase(phase: BattlePhase): Screen {
@@ -39,17 +50,21 @@ function screenForPhase(phase: BattlePhase): Screen {
 }
 
 export function useGame(): GameController {
-  const [screen, setScreen] = useState<Screen>('matchmaking');
+  const [screen, setScreen] = useState<Screen>('welcome');
   const [gameState, setGameState] = useState<BattleStateView | null>(null);
   const [lastEvents, setLastEvents] = useState<BattleEvent[]>([]);
   const [turnSeq, setTurnSeq] = useState(0);
   const [matching, setMatching] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [connected, setConnected] = useState(socket.connected);
+  const [gameOverReason, setGameOverReason] = useState<GameOverReason | undefined>(undefined);
 
   useEffect(() => {
     const sendHello = () => {
-      socket.emit('session:hello', { playerId: getOrCreatePlayerId() });
+      socket.emit('session:hello', {
+        playerId: getOrCreatePlayerId(),
+        token: getToken() ?? undefined,
+      });
     };
 
     const onConnect = () => {
@@ -95,7 +110,8 @@ export function useGame(): GameController {
       setScreen(screenForPhase(payload.state.phase));
     };
 
-    const onGameOver = (payload: { state: BattleStateView }) => {
+    const onGameOver = (payload: { state: BattleStateView; reason?: GameOverReason }) => {
+      setGameOverReason(payload.reason);
       setGameState(payload.state);
       setScreen('gameover');
       const isWinner = payload.state.winnerId === payload.state.self.id;
@@ -176,6 +192,47 @@ export function useGame(): GameController {
     playBGM('lobby');
   }, []);
 
+  const goToWelcome = useCallback(() => {
+    setScreen('welcome');
+    playSFX('click');
+  }, []);
+
+  const goToLogin = useCallback(() => {
+    setScreen('login');
+    playSFX('click');
+  }, []);
+
+  const goToRegister = useCallback(() => {
+    setScreen('register');
+    playSFX('click');
+  }, []);
+
+  const guestLogin = useCallback(() => {
+    setScreen('matchmaking');
+    playSFX('click');
+    playBGM('lobby');
+  }, []);
+
+  const refreshAuth = useCallback(() => {
+    if (socket.connected) {
+      socket.emit('session:hello', {
+        playerId: getOrCreatePlayerId(),
+        token: getToken() ?? undefined,
+      });
+    }
+  }, []);
+
+  const resetToWelcome = useCallback(() => {
+    socket.emit('queue:leave');
+    setGameState(null);
+    setLastEvents([]);
+    setTurnSeq(0);
+    setMatching(false);
+    setConnectionError(null);
+    setScreen('welcome');
+    playSFX('click');
+  }, []);
+
   return {
     screen,
     gameState,
@@ -184,6 +241,7 @@ export function useGame(): GameController {
     matching,
     connectionError,
     connected,
+    gameOverReason,
     joinQueue,
     leaveQueue,
     selectStarter,
@@ -191,5 +249,11 @@ export function useGame(): GameController {
     confirmSwitch,
     surrender,
     resetToMatchmaking,
+    resetToWelcome,
+    goToWelcome,
+    goToLogin,
+    goToRegister,
+    guestLogin,
+    refreshAuth,
   };
 }

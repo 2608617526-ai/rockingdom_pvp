@@ -72,6 +72,12 @@ async function main() {
   const [sa] = await matchAndStart(A, B, 'fire', 'grass');
   check('进入战斗阶段', sa.state.phase === 'BATTLE');
 
+  // 战斗内实时聊天
+  const chatB = once(B, 'chat:message');
+  A.emit('chat:message', { text: '你好，测试聊天' });
+  const chatMsg = await chatB;
+  check('战斗内聊天：对方收到消息', chatMsg.text === '你好，测试聊天' && typeof chatMsg.name === 'string', JSON.stringify(chatMsg));
+
   // ============ 2. 伤害公式 ============
   // 烈火战神吹火 vs 武斗酷猫：60 * 173/120 * 2(火→草) * 37/41 = 156
   console.log('伤害公式（吹火 vs 草）');

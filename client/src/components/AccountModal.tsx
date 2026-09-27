@@ -1,4 +1,5 @@
 import type { CurrentUser } from '../auth/user';
+import { playSFX } from '../audio';
 
 interface Props {
   user: CurrentUser;
@@ -25,7 +26,13 @@ export default function AccountModal({ user, onClose, onLogout }: Props) {
               退出登录
             </button>
           )}
-          <button className="btn btn--ghost btn--small" onClick={onClose}>
+          <button
+            className="btn btn--ghost btn--small"
+            onClick={() => {
+              playSFX('back');
+              onClose();
+            }}
+          >
             关闭
           </button>
         </div>

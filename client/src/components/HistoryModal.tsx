@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { HistoryBattleSummary } from '@rockingdom/shared';
 import type { CurrentUser } from '../auth/user';
 import { fetchHistory } from '../api/auth';
+import { playSFX } from '../audio';
 
 interface Props {
   user: CurrentUser;
@@ -73,7 +74,10 @@ export default function HistoryModal({ user, onClose, onSelectBattle }: Props) {
               <button
                 key={b.id}
                 className={`history-item history-item--${b.result}`}
-                onClick={() => onSelectBattle(b.id)}
+                onClick={() => {
+                  playSFX('open');
+                  onSelectBattle(b.id);
+                }}
               >
                 <div className="history-item__side">
                   <img className="history-item__avatar" src={user.avatar} alt="我" />
@@ -94,7 +98,13 @@ export default function HistoryModal({ user, onClose, onSelectBattle }: Props) {
           </div>
         )}
 
-        <button className="btn btn--ghost" onClick={onClose}>
+        <button
+          className="btn btn--ghost"
+          onClick={() => {
+            playSFX('back');
+            onClose();
+          }}
+        >
           关闭
         </button>
       </div>

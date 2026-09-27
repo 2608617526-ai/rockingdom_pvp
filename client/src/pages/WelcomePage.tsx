@@ -13,7 +13,7 @@ interface Props {
 
 export default function WelcomePage({ game, setUser }: Props) {
   useEffect(() => {
-    playBGM('lobby');
+    playBGM('auth');
   }, []);
 
   const guestLogin = () => {

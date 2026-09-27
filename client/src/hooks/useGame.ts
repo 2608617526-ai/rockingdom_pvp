@@ -162,6 +162,7 @@ export function useGame(): GameController {
   const leaveQueue = useCallback(() => {
     socket.emit('queue:leave');
     setMatching(false);
+    playSFX('back');
   }, []);
 
   const selectStarter = useCallback((petId: PetId) => {
@@ -189,12 +190,12 @@ export function useGame(): GameController {
     setMatching(false);
     setConnectionError(null);
     playSFX('click');
-    playBGM('lobby');
+    playBGM('match');
   }, []);
 
   const goToWelcome = useCallback(() => {
     setScreen('welcome');
-    playSFX('click');
+    playSFX('back');
   }, []);
 
   const goToLogin = useCallback(() => {
@@ -210,7 +211,7 @@ export function useGame(): GameController {
   const guestLogin = useCallback(() => {
     setScreen('matchmaking');
     playSFX('click');
-    playBGM('lobby');
+    playBGM('match');
   }, []);
 
   const refreshAuth = useCallback(() => {
@@ -230,7 +231,7 @@ export function useGame(): GameController {
     setMatching(false);
     setConnectionError(null);
     setScreen('welcome');
-    playSFX('click');
+    playSFX('back');
   }, []);
 
   return {

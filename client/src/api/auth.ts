@@ -37,6 +37,17 @@ export function login(account: string, password: string): Promise<AuthResponse> 
   return postJson<AuthResponse>('/api/auth/login', { account, password });
 }
 
+export interface MeResponse {
+  success: boolean;
+  user?: AuthUser;
+  message?: string;
+}
+
+/** 校验当前 token 是否仍有效（启动时用于清理失效登录态） */
+export function fetchMe(token: string): Promise<MeResponse> {
+  return getJson<MeResponse>('/api/auth/me', token);
+}
+
 export interface HistoryListResponse {
   success: boolean;
   battles?: HistoryBattleSummary[];

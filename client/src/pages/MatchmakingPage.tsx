@@ -9,7 +9,7 @@ import UserBadge from '../components/UserBadge';
 import HistoryModal from '../components/HistoryModal';
 import BattleLogModal from '../components/BattleLogModal';
 import AccountModal from '../components/AccountModal';
-import { playBGM } from '../audio';
+import { playBGM, playSFX } from '../audio';
 
 interface Props {
   game: GameController;
@@ -23,10 +23,11 @@ export default function MatchmakingPage({ game, user, setUser }: Props) {
   const [accountOpen, setAccountOpen] = useState(false);
 
   useEffect(() => {
-    playBGM('lobby');
+    playBGM('match');
   }, []);
 
   const onLogout = () => {
+    playSFX('danger');
     setAccountOpen(false);
     clearSession();
     setUser(GUEST_USER);
@@ -38,14 +39,27 @@ export default function MatchmakingPage({ game, user, setUser }: Props) {
     <div className="page page--matchmaking">
       <ParticleBackground />
       <FireEnergy />
-      <UserBadge user={user} onClick={() => setAccountOpen(true)} />
+      <UserBadge
+        user={user}
+        onClick={() => {
+          playSFX('open');
+          setAccountOpen(true);
+        }}
+      />
 
       <button className="mm-back" onClick={game.resetToWelcome} aria-label="返回">
         ← 返回
       </button>
 
       {!user.isGuest && (
-        <button className="history-fab" onClick={() => setHistoryOpen(true)} aria-label="过往对局">
+        <button
+          className="history-fab"
+          onClick={() => {
+            playSFX('open');
+            setHistoryOpen(true);
+          }}
+          aria-label="过往对局"
+        >
           <span className="history-fab__icon">⚔️</span>
           <span className="history-fab__label">过往对局</span>
         </button>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { HistoryBattleDetail } from '@rockingdom/shared';
 import type { CurrentUser } from '../auth/user';
 import { fetchBattleDetail } from '../api/auth';
+import { playSFX } from '../audio';
 
 interface Props {
   user: CurrentUser;
@@ -88,7 +89,13 @@ export default function BattleLogModal({ user, battleId, onClose }: Props) {
           </>
         )}
 
-        <button className="btn btn--ghost" onClick={onClose}>
+        <button
+          className="btn btn--ghost"
+          onClick={() => {
+            playSFX('back');
+            onClose();
+          }}
+        >
           关闭
         </button>
       </div>

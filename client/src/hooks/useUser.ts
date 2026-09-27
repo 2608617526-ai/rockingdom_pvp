@@ -1,6 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { CurrentUser } from '../auth/user';
-import { GUEST_USER, loadStoredUser, saveSession } from '../auth/user';
+import { GUEST_USER, getToken, loadStoredUser, saveSession } from '../auth/user';
+import { fetchMe } from '../api/auth';
 
 export interface UserController {
   user: CurrentUser;
@@ -14,5 +15,23 @@ export function useUser(): UserController {
     saveSession(next);
     setUser(next);
   }, []);
+
+  // 启动时校验 token：若已在别处失效（被挤下线 / 删除），清掉本地登录态
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    let cancelled = false;
+    fetchMe(token)
+      .then((res) => {
+        if (!cancelled && !res.success) updateUser(GUEST_USER);
+      })
+      .catch(() => {
+        // 网络异常时保留现状，不做处理
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [updateUser]);
+
   return { user, setUser: updateUser };
 }

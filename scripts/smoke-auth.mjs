@@ -227,6 +227,46 @@ async function main() {
   check('旧连接被挤下线', true);
   sNew.disconnect();
 
+  // ============ 9. 异地登录迁移战斗 ============
+  console.log('异地登录迁移战斗');
+  const saMig = await connectAs(tokenA, 'A-mig');
+  const sbMig = await connectAs(regB.body.token, 'B-mig');
+  await match(saMig, sbMig);
+  await selectBoth(saMig, sbMig);
+
+  // A 再登录并新开连接，应接续战斗而不是判负
+  const loginAMig2 = await post('/api/auth/login', { account: accA, password: 'Aa123456!' });
+  const saMig2 = io(URL, { transports: ['websocket'], forceNew: true, reconnection: false });
+  await new Promise((resolve, reject) => {
+    saMig2.on('connect', resolve);
+    saMig2.on('connect_error', reject);
+  });
+
+  const kickedAMig = once(saMig, 'session:kicked');
+  const stateAMig2 = once(saMig2, 'battle:state');
+  let bGotGameOver = false;
+  sbMig.on('battle:gameOver', () => {
+    bGotGameOver = true;
+  });
+
+  saMig2.emit('session:hello', {
+    playerId: `auth-A2-${Math.random().toString(16).slice(2, 8)}`,
+    token: loginAMig2.body.token,
+  });
+
+  await kickedAMig;
+  const stMig = await stateAMig2;
+  check(
+    '迁移后新连接接续战斗',
+    stMig.phase === 'BATTLE' || stMig.phase === 'FORCED_SWITCH',
+    `phase=${stMig.phase}`,
+  );
+  await new Promise((r) => setTimeout(r, 1200));
+  check('战斗未被判负（对方未收到 gameOver）', bGotGameOver === false);
+
+  saMig2.disconnect();
+  sbMig.disconnect();
+
   console.log(`\n== 结果：通过 ${passed}，失败 ${failed} ==\n`);
   process.exit(failed > 0 ? 1 : 0);
 }

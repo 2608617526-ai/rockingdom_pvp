@@ -19,7 +19,7 @@ export default function LoginPage({ game, setUser }: Props) {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    playBGM('lobby');
+    playBGM('auth');
   }, []);
 
   const onLogin = async () => {

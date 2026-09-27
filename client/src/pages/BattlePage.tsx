@@ -19,6 +19,7 @@ import EnergyBar from '../components/EnergyBar';
 import SkillCard from '../components/SkillCard';
 import BattleLog from '../components/BattleLog';
 import BattleFx from '../components/BattleFx';
+import BattleChat from '../components/BattleChat';
 import FloatingNumberLayer from '../components/FloatingNumberLayer';
 import { playBGM, playSFX } from '../audio';
 
@@ -204,6 +205,7 @@ export default function BattlePage({ game, user }: Props) {
 
   const onFlee = () => {
     if (!canAct) return;
+    playSFX('danger');
     if (!fleeArmed) {
       setFleeArmed(true);
       window.setTimeout(() => setFleeArmed(false), 2500);
@@ -290,6 +292,7 @@ export default function BattlePage({ game, user }: Props) {
 
         <FloatingNumberLayer floaters={floaters} />
         {fx && <BattleFx key={fx.id} side={fx.side} kind={fx.kind} />}
+        <BattleChat selfId={selfId ?? ''} />
       </div>
 
       <div className="battle-controls">
@@ -314,7 +317,10 @@ export default function BattlePage({ game, user }: Props) {
         <div className="battle-actions">
           <button
             className="btn btn--ghost"
-            onClick={() => setSwitchPanelOpen(true)}
+            onClick={() => {
+              playSFX('open');
+              setSwitchPanelOpen(true);
+            }}
             disabled={!canAct || benched.length === 0}
           >
             切换宠物
@@ -326,7 +332,13 @@ export default function BattlePage({ game, user }: Props) {
           >
             {fleeArmed ? '再点一次确认逃跑' : '逃跑'}
           </button>
-          <button className="btn btn--danger-ghost" onClick={game.surrender}>
+          <button
+            className="btn btn--danger-ghost"
+            onClick={() => {
+              playSFX('danger');
+              game.surrender();
+            }}
+          >
             认输
           </button>
         </div>
@@ -353,7 +365,13 @@ export default function BattlePage({ game, user }: Props) {
                 </button>
               ))}
             </div>
-            <button className="btn btn--ghost" onClick={() => setSwitchPanelOpen(false)}>
+            <button
+              className="btn btn--ghost"
+              onClick={() => {
+                playSFX('back');
+                setSwitchPanelOpen(false);
+              }}
+            >
               取消
             </button>
           </div>

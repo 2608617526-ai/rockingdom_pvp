@@ -1,12 +1,18 @@
+import { useEffect } from 'react';
 import type { GameController } from '../hooks/useGame';
 import Fireworks from '../components/Fireworks';
 import ParticleBackground from '../components/ParticleBackground';
+import { playBGM } from '../audio';
 
 interface Props {
   game: GameController;
 }
 
 export default function GameOverPage({ game }: Props) {
+  useEffect(() => {
+    playBGM('victory');
+  }, []);
+
   const state = game.gameState;
   const isDraw = state?.isDraw ?? false;
   const isWinner = state?.winnerId === state?.self.id;

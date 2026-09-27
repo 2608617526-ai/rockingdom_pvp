@@ -2,7 +2,7 @@ import { audioManager } from './AudioManager';
 import type { BgmKey, SfxKey } from './sounds';
 
 export { audioManager } from './AudioManager';
-export { AUDIO_ASSETS } from './sounds';
+export { BGM_ASSETS, SFX_ASSETS } from './sounds';
 export type { BgmKey, SfxKey } from './sounds';
 
 export const playSFX = (key: SfxKey): void => audioManager.playSFX(key);

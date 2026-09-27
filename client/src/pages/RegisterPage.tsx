@@ -30,7 +30,7 @@ export default function RegisterPage({ game, setUser }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    playBGM('lobby');
+    playBGM('auth');
   }, []);
 
   const accountOk = isSixDigitAccount(account);

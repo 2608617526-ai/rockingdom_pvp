@@ -1313,6 +1313,15 @@ function setupSocket(io2) {
         avatar: userRow.avatar
       } : null;
       if (userId) {
+        const battleRoomId = userIdToRoom.get(userId);
+        const battleRoom = battleRoomId ? rooms.get(battleRoomId) : void 0;
+        const battlePlayer = battleRoom?.players.find((p) => p.userId === userId);
+        const inBattle = !!battleRoom && !!battlePlayer && battleRoom.phase !== "GAME_OVER";
+        if (inBattle) {
+          battlePlayer.socketId = socket.id;
+          battlePlayer.connected = true;
+          socket.data.playerId = battlePlayer.id;
+        }
         const oldSocketId = userIdToSocket.get(userId);
         if (oldSocketId && oldSocketId !== socket.id) {
           const oldSocket = io2.sockets.sockets.get(oldSocketId);
@@ -1322,13 +1331,7 @@ function setupSocket(io2) {
           }
         }
         userIdToSocket.set(userId, socket.id);
-        const battleRoomId = userIdToRoom.get(userId);
-        const battleRoom = battleRoomId ? rooms.get(battleRoomId) : void 0;
-        const battlePlayer = battleRoom?.players.find((p) => p.userId === userId);
-        if (battleRoom && battlePlayer && battleRoom.phase !== "GAME_OVER") {
-          battlePlayer.socketId = socket.id;
-          battlePlayer.connected = true;
-          socket.data.playerId = battlePlayer.id;
+        if (inBattle) {
           socket.emit("session:restored", { playerId: battlePlayer.id });
           socket.emit("battle:state", buildStateView(battleRoom, battlePlayer.id));
           return;
@@ -1390,6 +1393,19 @@ function setupSocket(io2) {
     socket.on("queue:leave", () => {
       const playerId = socket.data.playerId;
       if (playerId) queue.leave(playerId);
+    });
+    socket.on("chat:message", (payload) => {
+      const playerId = socket.data.playerId;
+      if (!playerId) return;
+      const room = roomOf(playerId);
+      if (!room) return;
+      const text = typeof payload?.text === "string" ? payload.text.trim() : "";
+      if (!text || text.length > 120) return;
+      const player = room.players.find((p) => p.id === playerId);
+      const message = { playerId, name: player?.name ?? "\u73A9\u5BB6", text };
+      for (const p of room.players) {
+        if (p.socketId) io2.to(p.socketId).emit("chat:message", message);
+      }
     });
     socket.on("battle:selectStarter", (payload) => {
       const playerId = socket.data.playerId;

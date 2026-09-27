@@ -1,4 +1,4 @@
-import { AUDIO_ASSETS, type BgmKey, type SfxKey } from './sounds';
+import { BGM_ASSETS, SFX_ASSETS, type BgmKey, type SfxKey } from './sounds';
 
 /**
  * 统一音频管理。所有音频缺失时静默降级，绝不抛错、绝不阻断游戏流程。
@@ -11,7 +11,7 @@ class AudioManager {
   private muted = false;
 
   playSFX(key: SfxKey): void {
-    const audio = this.load(AUDIO_ASSETS[key]);
+    const audio = this.load(SFX_ASSETS[key]);
     if (!audio) return;
     audio.volume = this.muted ? 0 : this.masterVolume;
     audio.currentTime = 0;
@@ -27,7 +27,7 @@ class AudioManager {
       return;
     }
     this.stopBGM();
-    const audio = this.load(AUDIO_ASSETS[key]);
+    const audio = this.load(BGM_ASSETS[key]);
     this.bgmKey = key;
     if (!audio) return;
     audio.loop = true;

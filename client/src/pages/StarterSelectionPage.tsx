@@ -48,7 +48,7 @@ export default function StarterSelectionPage({ game, user }: Props) {
   const dragStart = useRef<number | null>(null);
 
   useEffect(() => {
-    playBGM('lobby');
+    playBGM('match');
   }, []);
 
   const selectedPet = PET_LIST[index];

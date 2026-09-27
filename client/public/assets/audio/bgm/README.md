@@ -1,2 +1,8 @@
 # BGM 目录
-放置 lobby.mp3 / battle.mp3
+
+放置以下 4 个文件（MP3）即可在对应页面自动循环播放：
+
+- `auth.mp3`    → 欢迎页 / 注册页 / 登录页
+- `match.mp3`   → 匹配页 / 选首发页
+- `battle.mp3`  → 战斗页
+- `victory.mp3` → 结算（胜利/失败）页

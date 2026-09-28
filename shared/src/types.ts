@@ -80,7 +80,7 @@ export interface PassiveState {
 // ==============================
 // 战斗行动
 // ==============================
-export type BattleActionType = 'SKILL' | 'SWITCH' | 'FLEE';
+export type BattleActionType = 'SKILL' | 'SWITCH';
 
 export interface BattleAction {
   type: BattleActionType;

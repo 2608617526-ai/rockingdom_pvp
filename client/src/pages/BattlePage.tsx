@@ -36,7 +36,6 @@ export default function BattlePage({ game, user }: Props) {
   const [log, setLog] = useState<BattleEvent[]>([]);
   const [animating, setAnimating] = useState(false);
   const [switchPanelOpen, setSwitchPanelOpen] = useState(false);
-  const [fleeArmed, setFleeArmed] = useState(false);
   const [fx, setFx] = useState<{ id: number; side: Side; kind: 'attack' | 'hit' } | null>(null);
   const [shaking, setShaking] = useState(false);
 
@@ -203,18 +202,6 @@ export default function BattlePage({ game, user }: Props) {
     game.chooseAction({ type: 'SWITCH', targetInstanceId: instanceId });
   };
 
-  const onFlee = () => {
-    if (!canAct) return;
-    playSFX('danger');
-    if (!fleeArmed) {
-      setFleeArmed(true);
-      window.setTimeout(() => setFleeArmed(false), 2500);
-      return;
-    }
-    setFleeArmed(false);
-    game.chooseAction({ type: 'FLEE' });
-  };
-
   const phaseLabel = animating
     ? '战斗执行中……'
     : actionSubmitted
@@ -324,13 +311,6 @@ export default function BattlePage({ game, user }: Props) {
             disabled={!canAct || benched.length === 0}
           >
             切换宠物
-          </button>
-          <button
-            className={`btn btn--danger ${fleeArmed ? 'btn--armed' : ''}`}
-            onClick={onFlee}
-            disabled={!canAct}
-          >
-            {fleeArmed ? '再点一次确认逃跑' : '逃跑'}
           </button>
           <button
             className="btn btn--danger-ghost"

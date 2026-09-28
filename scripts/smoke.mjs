@@ -173,22 +173,7 @@ async function main() {
   const [sg2] = await Promise.all([startAfter, startAfter2]);
   check('强制换宠后回到 BATTLE', sg2.state.phase === 'BATTLE');
 
-  // ============ 7. 逃跑判负 ============
-  console.log('逃跑判负');
-  const PI = 'smoke-iiiiii';
-  const PJ = 'smoke-jjjjjj';
-  const I = await connect(PI);
-  const J = await connect(PJ);
-  await matchAndStart(I, J, 'fire', 'water');
-  const goI = once(I, 'battle:gameOver');
-  const goJ = once(J, 'battle:gameOver');
-  I.emit('battle:chooseAction', { action: { type: 'FLEE' } });
-  J.emit('battle:chooseAction', { action: { type: 'SKILL', skillId: 'charge' } });
-  const [gi] = await Promise.all([goI, goJ]);
-  check('逃跑方判负', gi.state.winnerId === PJ, `winner=${gi.state.winnerId}`);
-  check('对方获胜', gi.state.winnerId !== PI);
-
-  // ============ 8. 认输 ============
+  // ============ 7. 认输 ============
   console.log('认输');
   const PK = 'smoke-kkkkkk';
   const PL = 'smoke-llllll';
@@ -200,7 +185,7 @@ async function main() {
   const gk = await goK;
   check('认输后对手获胜', gk.state.winnerId === PL);
 
-  [A, B, C, D, E, F, G, H, I, J, K, L].forEach((s) => s.disconnect());
+  [A, B, C, D, E, F, G, H, K, L].forEach((s) => s.disconnect());
 
   console.log(`\n== 结果：通过 ${passed}，失败 ${failed} ==\n`);
   process.exit(failed > 0 ? 1 : 0);

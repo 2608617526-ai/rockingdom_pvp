@@ -24,8 +24,6 @@ export function validateAction(
       return validateSkillAction(player, action.skillId);
     case 'SWITCH':
       return validateSwitchAction(player, action.targetInstanceId);
-    case 'FLEE':
-      return { ok: true };
     default:
       return { ok: false, reason: '未知行动类型' };
   }

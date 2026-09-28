@@ -724,8 +724,6 @@ function validateAction(player, action) {
       return validateSkillAction(player, action.skillId);
     case "SWITCH":
       return validateSwitchAction(player, action.targetInstanceId);
-    case "FLEE":
-      return { ok: true };
     default:
       return { ok: false, reason: "\u672A\u77E5\u884C\u52A8\u7C7B\u578B" };
   }
@@ -862,28 +860,6 @@ var BattleEngine = class {
     const actionA = a.currentAction;
     const actionB = b.currentAction;
     events.push({ type: "TURN_START", description: `\u7B2C ${room.turn} \u56DE\u5408` });
-    const fleeA = actionA?.type === "FLEE";
-    const fleeB = actionB?.type === "FLEE";
-    if (fleeA || fleeB) {
-      if (fleeA && fleeB) {
-        room.isDraw = true;
-        room.winnerId = null;
-        events.push({ type: "FLEE", description: "\u53CC\u65B9\u540C\u65F6\u9003\u8DD1\uFF0C\u5224\u5B9A\u4E3A\u5E73\u5C40\uFF01" });
-      } else {
-        const loser = fleeA ? a : b;
-        const winner = fleeA ? b : a;
-        room.winnerId = winner.id;
-        events.push({
-          type: "FLEE",
-          actorId: loser.id,
-          actorName: loser.name,
-          description: `${loser.name} \u9003\u8DD1\u4E86\uFF01${winner.name} \u83B7\u80DC\uFF01`
-        });
-      }
-      room.endReason = fleeA && fleeB ? "DRAW" : "FLEE";
-      room.phase = "GAME_OVER";
-      return { events, gameOver: true };
-    }
     const switchA = actionA?.type === "SWITCH";
     const switchB = actionB?.type === "SWITCH";
     if (switchA || switchB) {

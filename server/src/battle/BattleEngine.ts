@@ -150,31 +150,7 @@ export class BattleEngine {
 
     events.push({ type: 'TURN_START', description: `第 ${room.turn} 回合` });
 
-    // 1. 逃跑（优先级最高）
-    const fleeA = actionA?.type === 'FLEE';
-    const fleeB = actionB?.type === 'FLEE';
-    if (fleeA || fleeB) {
-      if (fleeA && fleeB) {
-        room.isDraw = true;
-        room.winnerId = null;
-        events.push({ type: 'FLEE', description: '双方同时逃跑，判定为平局！' });
-      } else {
-        const loser = fleeA ? a : b;
-        const winner = fleeA ? b : a;
-        room.winnerId = winner.id;
-        events.push({
-          type: 'FLEE',
-          actorId: loser.id,
-          actorName: loser.name,
-          description: `${loser.name} 逃跑了！${winner.name} 获胜！`,
-        });
-      }
-      room.endReason = fleeA && fleeB ? 'DRAW' : 'FLEE';
-      room.phase = 'GAME_OVER';
-      return { events, gameOver: true };
-    }
-
-    // 2. 切换（优先级第二）
+    // 1. 切换（优先级最高）
     const switchA = actionA?.type === 'SWITCH';
     const switchB = actionB?.type === 'SWITCH';
     if (switchA || switchB) {

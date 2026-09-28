@@ -14,7 +14,7 @@ export const SFX_ASSETS = {
   hover: '/assets/audio/sfx/hover.mp3', // 鼠标悬停按钮/卡片
   click: '/assets/audio/sfx/click.mp3', // 通用点击 / 确认
   back: '/assets/audio/sfx/back.mp3', // 返回 / 取消 / 关闭
-  danger: '/assets/audio/sfx/danger.mp3', // 逃跑 / 认输 / 退出登录
+  danger: '/assets/audio/sfx/danger.mp3', // 认输 / 退出登录
   open: '/assets/audio/sfx/open.mp3', // 打开面板 / 弹窗
   match: '/assets/audio/sfx/match.mp3',
   attack: '/assets/audio/sfx/attack.mp3',

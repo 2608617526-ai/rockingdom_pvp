@@ -28,8 +28,8 @@ export default function WelcomePage({ game, setUser }: Props) {
       <ParticleBackground />
       <FireEnergy />
       <div className="welcome-content">
-        <h1 className="mm-title">洛克王国主宠PK</h1>
-        <p className="mm-subtitle">在线实时 · 1v1 · 三宠物回合制对战</p>
+        <h1 className="mm-title">御三家修罗场</h1>
+        <p className="mm-subtitle">天洪免费？！ 直接天洪！</p>
 
         <div className="welcome-actions">
           <button className="btn btn--primary btn--glow" onClick={game.goToLogin}>

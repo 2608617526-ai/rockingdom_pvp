@@ -11,7 +11,7 @@ export const PET_DEFINITIONS: Record<string, PetDefinition> = {
     name: '烈火战神',
     element: 'FIRE',
     baseStats: {
-      maxHp: 400,
+      maxHp: 350,
       physicalAttack: 173,
       physicalDefense: 100,
       magicAttack: 0,
@@ -29,7 +29,7 @@ export const PET_DEFINITIONS: Record<string, PetDefinition> = {
     name: '圣水守护',
     element: 'WATER',
     baseStats: {
-      maxHp: 600,
+      maxHp: 450,
       physicalAttack: 0,
       physicalDefense: 150,
       magicAttack: 130,
@@ -47,7 +47,7 @@ export const PET_DEFINITIONS: Record<string, PetDefinition> = {
     name: '武斗酷猫',
     element: 'GRASS',
     baseStats: {
-      maxHp: 500,
+      maxHp: 400,
       physicalAttack: 150,
       physicalDefense: 120,
       magicAttack: 0,

@@ -102,7 +102,7 @@ var PET_DEFINITIONS = {
     name: "\u70C8\u706B\u6218\u795E",
     element: "FIRE",
     baseStats: {
-      maxHp: 400,
+      maxHp: 350,
       physicalAttack: 173,
       physicalDefense: 100,
       magicAttack: 0,
@@ -120,7 +120,7 @@ var PET_DEFINITIONS = {
     name: "\u5723\u6C34\u5B88\u62A4",
     element: "WATER",
     baseStats: {
-      maxHp: 600,
+      maxHp: 450,
       physicalAttack: 0,
       physicalDefense: 150,
       magicAttack: 130,
@@ -138,7 +138,7 @@ var PET_DEFINITIONS = {
     name: "\u6B66\u6597\u9177\u732B",
     element: "GRASS",
     baseStats: {
-      maxHp: 500,
+      maxHp: 400,
       physicalAttack: 150,
       physicalDefense: 120,
       magicAttack: 0,

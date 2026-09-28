@@ -87,7 +87,7 @@ async function main() {
   const fire1 = ra.state.self.pets.find((p) => p.petId === 'fire');
   const grass1 = ra.state.opponent.pets.find((p) => p.petId === 'grass');
   check('烈火战神能量 10→9', fire1.energy === 9, `实际=${fire1.energy}`);
-  check('武斗酷猫 HP 500→344', grass1.hp === 344, `实际=${grass1.hp}`);
+  check('武斗酷猫 HP 400→244', grass1.hp === 244, `实际=${grass1.hp}`);
   check('速度：聚能(草135)先于吹火(火130)',
     ra.events.find((e) => e.type === 'ATTACK' || e.type === 'STATUS')?.description?.includes('聚能') === true);
 
@@ -99,9 +99,9 @@ async function main() {
   // 80 * 224.9/120 * 2 * 37/41 ≈ 270.6 → ×0.3 = 81
   check('减伤后吹火伤害 = 81', dmgEvt2?.value === 81, `实际=${dmgEvt2?.value}`);
   const healEvt = ra2.events.find((e) => e.type === 'HEAL');
-  check('酶浓度调整回血 100', healEvt?.value === 100, `实际=${healEvt?.value}`);
+  check('酶浓度调整回血 80', healEvt?.value === 80, `实际=${healEvt?.value}`);
   const grass2 = ra2.state.opponent.pets.find((p) => p.petId === 'grass');
-  check('武斗酷猫 HP 344-81+100=363', grass2.hp === 363, `实际=${grass2.hp}`);
+  check('武斗酷猫 HP 244-81+80=243', grass2.hp === 243, `实际=${grass2.hp}`);
 
   // 火焰护盾（火系防御技）也应触发山火威力翻倍：两次吹火后 mult=4，火焰护盾后=8
   const [ra3] = await playTurn(A, B, { type: 'SKILL', skillId: 'fire_shield' }, { type: 'SKILL', skillId: 'charge' });
@@ -126,7 +126,7 @@ async function main() {
   const cGrass = rc.state.self.pets.find((p) => p.petId === 'grass');
   check('C 出战宠物已切换为草系', cGrass.status === 'ACTIVE');
   // 气泡：水→草 ×1，100 * 130/120 * 37/41 ≈ 97
-  check('草系承伤 ≈97', cGrass.hp === 403, `实际=${cGrass.hp}`);
+  check('草系承伤 ≈97', cGrass.hp === 303, `实际=${cGrass.hp}`);
 
   // ============ 5. 天洪应对状态技能 ============
   console.log('天洪应对状态技能');

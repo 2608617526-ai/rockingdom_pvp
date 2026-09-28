@@ -38,6 +38,7 @@ export default function BattlePage({ game, user }: Props) {
   const [switchPanelOpen, setSwitchPanelOpen] = useState(false);
   const [fx, setFx] = useState<{ id: number; side: Side; kind: 'attack' | 'hit' } | null>(null);
   const [shaking, setShaking] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
 
   const floaterIdRef = useRef(0);
   const fxIdRef = useRef(0);
@@ -248,6 +249,8 @@ export default function BattlePage({ game, user }: Props) {
               />
             </div>
           )}
+          <FloatingNumberLayer floaters={floaters.filter((f) => f.side === 'self')} />
+          {fx?.side === 'self' && <BattleFx key={fx.id} side="self" kind={fx.kind} />}
         </div>
 
         <div className="battle-vs">VS</div>
@@ -275,11 +278,9 @@ export default function BattlePage({ game, user }: Props) {
               maxEnergy={oppActive?.maxEnergy ?? 10}
             />
           </div>
+          <FloatingNumberLayer floaters={floaters.filter((f) => f.side === 'opponent')} />
+          {fx?.side === 'opponent' && <BattleFx key={fx.id} side="opponent" kind={fx.kind} />}
         </div>
-
-        <FloatingNumberLayer floaters={floaters} />
-        {fx && <BattleFx key={fx.id} side={fx.side} kind={fx.kind} />}
-        <BattleChat selfId={selfId ?? ''} />
       </div>
 
       <div className="battle-controls">
@@ -324,7 +325,14 @@ export default function BattlePage({ game, user }: Props) {
         </div>
       </div>
 
-      <BattleLog events={log} />
+      <BattleChat selfId={selfId ?? ''} />
+
+      <div className="battle-log-area">
+        {logOpen && <BattleLog events={log} />}
+        <button className="battle-log-area__btn" onClick={() => setLogOpen((o) => !o)}>
+          {logOpen ? '收起日志' : '📜 日志'}
+        </button>
+      </div>
 
       {switchPanelOpen && (
         <div className="modal">
